@@ -5,9 +5,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Kajian IKPA — KPPN Pekalongan</title>
 <style>
-  body { margin: 0; font-family: 'Inter', system-ui, sans-serif; }
-  * { box-sizing: border-box; }
-  .flex { display: flex; } .grid { display: grid; } .hidden { display: none; }
+  :root {
+    --navy: #0F2540; --navyDeep: #081729; --steel: #1D4E89; --gold: #C99A3D; --goldSoft: #E9C77B;
+    --bg: #F3F4F7; --card: #FFFFFF; --ink: #16202E; --muted: #6B7686; --line: #E4E6EC;
+    --danger: #B3382C; --dangerBg: #FBEBE9; --success: #1F7A54; --successBg: #E9F5EF;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,.06); --shadow-md: 0 4px 12px rgba(0,0,0,.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--ink); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+  .animate-in { animation: fadeIn .4s ease-out both; }
+  .shimmer { background: linear-gradient(90deg, #e8eaee 25%, #f4f5f7 50%, #e8eaee 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+  /* DROPDOWN */
+  .nav-dropdown { position: relative; display: inline-block; }
+  .nav-dropdown-btn { display: flex; align-items: center; gap: .5rem; padding: .55rem 1rem; border-radius: 8px; border: 1.5px solid rgba(255,255,255,.18); background: rgba(255,255,255,.08); color: #fff; font-size: .8125rem; font-weight: 500; cursor: pointer; transition: all .2s; font-family: 'Inter', system-ui, sans-serif; white-space: nowrap; }
+  .nav-dropdown-btn:hover { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.3); }
+  .nav-dropdown-btn .chevron { transition: transform .25s; font-size: .625rem; opacity: .7; }
+  .nav-dropdown.open .nav-dropdown-btn .chevron { transform: rotate(180deg); }
+  .nav-dropdown-menu { position: absolute; top: calc(100% + 6px); right: 0; min-width: 260px; background: var(--card); border-radius: 10px; border: 1px solid var(--line); box-shadow: 0 8px 30px rgba(0,0,0,.12); z-index: 100; overflow: hidden; opacity: 0; visibility: hidden; transform: translateY(-8px); transition: all .2s cubic-bezier(0.4, 0, 0.2, 1); }
+  .nav-dropdown.open .nav-dropdown-menu { opacity: 1; visibility: visible; transform: translateY(0); }
+  .nav-dropdown-item { display: flex; align-items: center; gap: .625rem; width: 100%; padding: .625rem .875rem; border: none; background: transparent; color: var(--ink); font-size: .8125rem; font-weight: 500; cursor: pointer; transition: background .15s; text-align: left; font-family: 'Inter', system-ui, sans-serif; }
+  .nav-dropdown-item:hover { background: #F5F6F9; }
+  .nav-dropdown-item .item-icon { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; background: #EEF1F5; flex-shrink: 0; }
+  .nav-dropdown-item:hover .item-icon { background: #DEE4EC; }
+  .nav-dropdown-item .item-badge { margin-left: auto; font-family: 'IBM Plex Mono', monospace; font-size: .6875rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: #EEF1F5; color: var(--muted); }
+  .nav-dropdown-backdrop { position: fixed; inset: 0; z-index: 99; }
   .flex-1 { flex: 1 1 0%; } .flex-wrap { flex-wrap: wrap; }
   .items-center { align-items: center; } .items-baseline { align-items: baseline; }
   .justify-between { justify-content: space-between; } .justify-center { justify-content: center; }
@@ -18393,7 +18416,7 @@ function TrendChart({ series, title, unit = "" }) {
 /* =========================================================================
    KARTU INDIKATOR
    ========================================================================= */
-function IndicatorCard({ config, periode, expanded, onToggle }) {
+function IndicatorCard(_a) { var config = _a.config, periode = _a.periode, expanded = _a.expanded, onToggle = _a.onToggle, onResult = _a.onResult;
     const [files, setFiles] = useState({});
     const [result, setResult] = useState(null);
     const [error, setError] = useState(null);
@@ -18408,6 +18431,7 @@ function IndicatorCard({ config, periode, expanded, onToggle }) {
                 workbooks[slot.key] = await readWorkbook(files[slot.key]);
             const res = config.analyze(workbooks, periode);
             setResult(res);
+            if (onResult) onResult(config.id, res);
         }
         catch (e) {
             setError("Gagal membaca file — pastikan struktur sheet sesuai format MyIntress.");
@@ -18695,7 +18719,19 @@ const INDICATORS = [
    ========================================================================= */
 function KajianIKPAApp() {
     const [periode, setPeriode] = useState("06");
-    const [expandedSet, setExpandedSet] = useState(new Set(["penyerapan"]));
+    const [expandedSet, setExpandedSet] = useState(new Set());
+    const [dropdownOpen, setDropdownOpen] = useState(false);
+    const [selectedId, setSelectedId] = useState(null);
+    const [resultsMap, setResultsMap] = useState({});
+    var selectedCfg = selectedId ? INDICATORS.find(function (c) { return c.id === selectedId; }) : null;
+    var btnLabel = selectedCfg ? selectedCfg.title : "Indikator IKPA";
+    var handleResult = function (id, res) {
+        setResultsMap(function (prev) {
+            var next = Object.assign({}, prev);
+            next[id] = res;
+            return next;
+        });
+    };
     const togglePanel = function (id) {
         setExpandedSet(function (prev) {
             var next = new Set(prev);
@@ -18720,22 +18756,47 @@ function KajianIKPAApp() {
                         React.createElement("h1", { className: "text-xl font-bold text-white" }, "Kajian Data Kinerja Pelaksanaan Anggaran"),
                         React.createElement("div", { className: "text-sm mt-0.5", style: { color: "#9FB3CC" } }, "Upload data mentah MyIntress per indikator \u2014 analisis dihitung langsung di browser")),
                     React.createElement("div", { className: "flex items-center gap-2" },
+                        React.createElement("div", { className: "nav-dropdown" + (dropdownOpen ? " open" : "") },
+                            React.createElement("button", { className: "nav-dropdown-btn", onClick: function () { return setDropdownOpen(function (v) { return !v; }); } },
+                                btnLabel,
+                                React.createElement("span", { className: "chevron" }, "▼")),
+                            dropdownOpen && React.createElement("div", { className: "nav-dropdown-backdrop", onClick: function () { return setDropdownOpen(false); } }),
+                            React.createElement("div", { className: "nav-dropdown-menu" },
+                                INDICATORS.map(function (cfg) {
+                                    var Icon = cfg.icon;
+                                    return (React.createElement("button", { key: cfg.id, className: "nav-dropdown-item", onClick: function () {
+                                            setDropdownOpen(false);
+                                            setSelectedId(cfg.id);
+                                            setExpandedSet(function (prev) { var n = new Set(prev); n.add(cfg.id); return n; });
+                                        } },
+                                        React.createElement("div", { className: "item-icon" },
+                                            React.createElement(Icon, { size: 14, style: { color: "var(--steel)" } })),
+                                        cfg.title,
+                                        resultsMap[cfg.id] ? (React.createElement("span", { className: "item-badge" },
+                                            cfg.id === "tagihan" ? (resultsMap[cfg.id].pctTepat || 0).toFixed(1) + "%" :
+                                            cfg.id === "capaian" ? (resultsMap[cfg.id].rata2 || 0).toFixed(1) :
+                                            resultsMap[cfg.id].nilai ? resultsMap[cfg.id].nilai.toFixed(1) :
+                                            resultsMap[cfg.id].rata2 ? resultsMap[cfg.id].rata2.toFixed(1) : "-"
+                                        )) : null));
+                                })))),
+                    React.createElement("div", { className: "flex items-center gap-2" },
                         React.createElement("span", { className: "text-xs", style: { color: "#9FB3CC" } }, "Periode"),
                         React.createElement("select", { value: periode, onChange: function (e) { return setPeriode(e.target.value); }, className: "px-3 py-2 rounded-lg text-sm font-medium border-0 outline-none", style: { background: "rgba(255,255,255,0.1)", color: "white", fontFamily: "'IBM Plex Mono', monospace" } }, Object.keys(BULAN_NAMA).map(function (p) { return (React.createElement("option", { key: p, value: p, style: { color: T.ink } },
                             p,
-                            " \u2014 ",
+                            " — ",
                             BULAN_NAMA[p])); })))))),
         React.createElement("div", { style: { height: 3, background: "linear-gradient(90deg, " + T.gold + ", " + T.goldSoft + ", " + T.gold + ")" } }),
         React.createElement("div", { className: "px-6 py-6", style: { maxWidth: "1440px", margin: "0 auto" } },
-            React.createElement("div", { className: "flex gap-4 panel-scroll", style: { overflowX: "auto", paddingBottom: "8px" } },
-                INDICATORS.map(function (cfg) {
-                    return (React.createElement("div", { key: cfg.id, style: { minWidth: "420px", maxWidth: "520px", flex: "1 0 auto" } },
-                        React.createElement(IndicatorCard, { config: cfg, periode: periode, expanded: expandedSet.has(cfg.id), onToggle: function () { return togglePanel(cfg.id); } })));
-                })),
-            React.createElement("div", { className: "mt-6 text-xs text-center", style: { color: T.muted } }, "Satker BLU/dana khusus (423620) dikecualikan otomatis dari seluruh perhitungan. Klik pada header indikator untuk membuka/menutup panel analisis. Panel yang terbuka tidak akan tertutup saat panel lain dibuka."))));
+            !selectedId && (React.createElement("div", { className: "animate-in", style: { textAlign: "center", padding: "4rem 2rem" } },
+                React.createElement("div", { style: { fontSize: "2.5rem", marginBottom: ".75rem", opacity: .25 } }, "..."),
+                React.createElement("div", { className: "text-sm font-medium mb-1", style: { color: "var(--muted)" } }, "Belum ada indikator yang dipilih"),
+                React.createElement("div", { className: "text-xs", style: { color: "var(--muted)", opacity: .7 } }, "Klik tombol Indikator IKPA di pojok kanan atas untuk memulai analisis"))),
+            selectedId && selectedCfg && (React.createElement("div", { id: "card-" + selectedId, className: "animate-in", style: { maxWidth: "900px", margin: "0 auto" } },
+                React.createElement(IndicatorCard, { config: selectedCfg, periode: periode, expanded: expandedSet.has(selectedId), onToggle: function () { return togglePanel(selectedId); }, onResult: handleResult }))),
+            React.createElement("div", { className: "mt-6 text-xs text-center", style: { color: T.muted } }, "Satker BLU/dana khusus (423620) dikecualikan otomatis."))));
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(KajianIKPAApp));
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1ff8f538f9c2fbd',t:'MTc4NDg2MDgyMw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1ffd46fa9d45833',t:'MTc4NDg2MzY1NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
