@@ -18417,9 +18417,17 @@ function IndicatorCard({ config, periode, expanded, onToggle }) {
             setLoading(false);
         }
     }, [files, periode, config]);
-    React.useEffect(() => { if (allFilesReady)
-        runAnalysis(); }, [allFilesReady, periode]);
-    const Icon = config.icon;
+
+    var prevFilesRef = useRef(null);
+    React.useEffect(function () {
+        var currentKeys = Object.keys(files).sort().join(",");
+        var prevKeys = prevFilesRef.current;
+        if (allFilesReady && currentKeys !== prevKeys) {
+            prevFilesRef.current = currentKeys;
+            runAnalysis();
+        }
+    }, [files, periode]);
+    var Icon = config.icon;
     return (React.createElement("div", { className: "rounded-xl border overflow-hidden", style: { borderColor: T.line, background: T.card } },
         React.createElement("button", { onClick: onToggle, className: "w-full flex items-center gap-3 px-4 py-3.5 text-left" },
             React.createElement("div", { className: "w-9 h-9 rounded-lg flex items-center justify-center shrink-0", style: { background: result ? T.navy : "#EEF1F5" } },
@@ -18687,13 +18695,25 @@ const INDICATORS = [
    ========================================================================= */
 function KajianIKPAApp() {
     const [periode, setPeriode] = useState("06");
-    const [expandedId, setExpandedId] = useState("penyerapan");
+    const [expandedSet, setExpandedSet] = useState(new Set(["penyerapan"]));
+    const togglePanel = function (id) {
+        setExpandedSet(function (prev) {
+            var next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
     return (React.createElement("div", { className: "min-h-screen w-full", style: { background: T.bg } },
         React.createElement("style", null, `
         * { font-family: system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; }
+        .panel-scroll::-webkit-scrollbar { height: 8px; }
+        .panel-scroll::-webkit-scrollbar-track { background: #E4E6EC; border-radius: 10px; }
+        .panel-scroll::-webkit-scrollbar-thumb { background: #9FB3CC; border-radius: 10px; }
+        .panel-scroll::-webkit-scrollbar-thumb:hover { background: #6B7686; }
       `),
-        React.createElement("div", { style: { background: `linear-gradient(135deg, ${T.navy} 0%, ${T.navyDeep} 100%)` }, className: "px-6 py-6" },
-            React.createElement("div", { className: "max-w-5xl mx-auto" },
+        React.createElement("div", { style: { background: "linear-gradient(135deg, " + T.navy + " 0%, " + T.navyDeep + " 100%)" }, className: "px-6 py-6" },
+            React.createElement("div", { className: "max-w-full mx-auto", style: { maxWidth: "1440px" } },
                 React.createElement("div", { className: "flex items-center justify-between flex-wrap gap-4" },
                     React.createElement("div", null,
                         React.createElement("div", { className: "text-[11px] font-semibold uppercase tracking-[0.15em] mb-1", style: { color: T.goldSoft } }, "KPPN Pekalongan \u00B7 Direktorat Jenderal Perbendaharaan"),
@@ -18701,17 +18721,21 @@ function KajianIKPAApp() {
                         React.createElement("div", { className: "text-sm mt-0.5", style: { color: "#9FB3CC" } }, "Upload data mentah MyIntress per indikator \u2014 analisis dihitung langsung di browser")),
                     React.createElement("div", { className: "flex items-center gap-2" },
                         React.createElement("span", { className: "text-xs", style: { color: "#9FB3CC" } }, "Periode"),
-                        React.createElement("select", { value: periode, onChange: (e) => setPeriode(e.target.value), className: "px-3 py-2 rounded-lg text-sm font-medium border-0 outline-none", style: { background: "rgba(255,255,255,0.1)", color: "white", fontFamily: "'IBM Plex Mono', monospace" } }, Object.keys(BULAN_NAMA).map((p) => (React.createElement("option", { key: p, value: p, style: { color: T.ink } },
+                        React.createElement("select", { value: periode, onChange: function (e) { return setPeriode(e.target.value); }, className: "px-3 py-2 rounded-lg text-sm font-medium border-0 outline-none", style: { background: "rgba(255,255,255,0.1)", color: "white", fontFamily: "'IBM Plex Mono', monospace" } }, Object.keys(BULAN_NAMA).map(function (p) { return (React.createElement("option", { key: p, value: p, style: { color: T.ink } },
                             p,
                             " \u2014 ",
-                            BULAN_NAMA[p])))))))),
-        React.createElement("div", { style: { height: 3, background: `linear-gradient(90deg, ${T.gold}, ${T.goldSoft}, ${T.gold})` } }),
-        React.createElement("div", { className: "max-w-5xl mx-auto px-6 py-6" },
-            React.createElement("div", { className: "grid gap-3" }, INDICATORS.map((cfg) => (React.createElement(IndicatorCard, { key: cfg.id, config: cfg, periode: periode, expanded: expandedId === cfg.id, onToggle: () => setExpandedId(expandedId === cfg.id ? null : cfg.id) })))),
-            React.createElement("div", { className: "mt-6 text-xs text-center", style: { color: T.muted } }, "Satker BLU/dana khusus (423620) dikecualikan otomatis dari seluruh perhitungan."))));
+                            BULAN_NAMA[p])); })))))),
+        React.createElement("div", { style: { height: 3, background: "linear-gradient(90deg, " + T.gold + ", " + T.goldSoft + ", " + T.gold + ")" } }),
+        React.createElement("div", { className: "px-6 py-6", style: { maxWidth: "1440px", margin: "0 auto" } },
+            React.createElement("div", { className: "flex gap-4 panel-scroll", style: { overflowX: "auto", paddingBottom: "8px" } },
+                INDICATORS.map(function (cfg) {
+                    return (React.createElement("div", { key: cfg.id, style: { minWidth: "420px", maxWidth: "520px", flex: "1 0 auto" } },
+                        React.createElement(IndicatorCard, { config: cfg, periode: periode, expanded: expandedSet.has(cfg.id), onToggle: function () { return togglePanel(cfg.id); } })));
+                })),
+            React.createElement("div", { className: "mt-6 text-xs text-center", style: { color: T.muted } }, "Satker BLU/dana khusus (423620) dikecualikan otomatis dari seluruh perhitungan. Klik pada header indikator untuk membuka/menutup panel analisis. Panel yang terbuka tidak akan tertutup saat panel lain dibuka."))));
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(KajianIKPAApp));
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1ff64e0fd81f93f',t:'MTc4NDg1OTA4NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1ff8f538f9c2fbd',t:'MTc4NDg2MDgyMw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
