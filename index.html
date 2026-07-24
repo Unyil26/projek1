@@ -97,6 +97,14 @@
   }
   .ikpa-btn-dashboard:hover { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.35); }
   .ikpa-btn-dashboard.active { background: rgba(201,154,61,.2); border-color: var(--gold); color: var(--goldSoft); }
+  .back-btn {
+    display: inline-flex; align-items: center; gap: .375rem; padding: .4rem .75rem;
+    border-radius: 7px; border: 1px solid var(--line); background: var(--card);
+    color: var(--muted); font-size: .75rem; font-weight: 500; cursor: pointer;
+    transition: all .2s; margin-bottom: 1rem; font-family: 'Inter', system-ui, sans-serif;
+  }
+  .back-btn:hover { border-color: var(--steel); color: var(--steel); background: #F8F9FB; }
+  .detail-page { max-width: 900px; margin: 0 auto; animation: fadeIn .35s ease-out both; }
   .ikpa-section-title {
     font-size: .6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
     color: var(--muted); padding: .75rem .25rem .5rem;
@@ -18487,9 +18495,8 @@ function TrendChart({ series, title, unit = "" }) {
 /* =========================================================================
    KARTU INDIKATOR
    ========================================================================= */
-function IndicatorCard(_a) { var config = _a.config, periode = _a.periode, expanded = _a.expanded, onToggle = _a.onToggle, onResult = _a.onResult;
+function IndicatorCard(_a) { var config = _a.config, periode = _a.periode, expanded = _a.expanded, onToggle = _a.onToggle, onResult = _a.onResult, hasil = _a.hasil;
     const [files, setFiles] = useState({});
-    const [result, setResult] = useState(null);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const allFilesReady = config.slots.every((s) => files[s.key]);
@@ -18509,12 +18516,11 @@ function IndicatorCard(_a) { var config = _a.config, periode = _a.periode, expan
                 workbooks[slot.key] = await readWorkbook(files[slot.key]);
             }
             var res = cfg.analyze(workbooks, periode);
-            setResult(res);
             if (onRes) onRes(cfg.id, res);
         }
         catch (e) {
             setError("Gagal membaca file — pastikan struktur sheet sesuai format MyIntress.");
-            setResult(null);
+            if (onRes) onRes(cfg.id, null);
         }
         finally {
             setLoading(false);
@@ -18531,22 +18537,25 @@ function IndicatorCard(_a) { var config = _a.config, periode = _a.periode, expan
         }
     }, [files, periode]);
     var Icon = config.icon;
+    var hasResultInMap = hasil !== null && hasil !== undefined;
+    var compactStat = hasResultInMap ? config.headlineValue(hasil) : null;
+    var compactTone = hasResultInMap ? config.tone(hasil) : null;
     return (React.createElement("div", { className: "rounded-xl border overflow-hidden", style: { borderColor: T.line, background: T.card } },
         React.createElement("button", { onClick: onToggle, className: "w-full flex items-center gap-3 px-4 py-3.5 text-left" },
-            React.createElement("div", { className: "w-9 h-9 rounded-lg flex items-center justify-center shrink-0", style: { background: result ? T.navy : "#EEF1F5" } },
-                React.createElement(Icon, { size: 17, style: { color: result ? T.goldSoft : T.muted } })),
+            React.createElement("div", { className: "w-9 h-9 rounded-lg flex items-center justify-center shrink-0", style: { background: hasResultInMap ? T.navy : "#EEF1F5" } },
+                React.createElement(Icon, { size: 17, style: { color: hasResultInMap ? T.goldSoft : T.muted } })),
             React.createElement("div", { className: "flex-1 min-w-0" },
                 React.createElement("div", { className: "text-sm font-semibold", style: { color: T.ink } }, config.title),
-                React.createElement("div", { className: "text-xs", style: { color: T.muted } }, loading ? "Memproses…" : result ? config.headline(result) : "Belum ada file diunggah")),
-            result && !loading && React.createElement(StatPill, { value: config.headlineValue(result), tone: config.tone(result) }),
+                React.createElement("div", { className: "text-xs", style: { color: T.muted } }, loading ? "Memproses…" : hasResultInMap ? config.headline(hasil) : "Belum ada file diunggah")),
+            hasResultInMap && !loading && React.createElement(StatPill, { value: compactStat, tone: compactTone }),
             expanded ? React.createElement(ChevronDown, { size: 16, style: { color: T.muted } }) : React.createElement(ChevronRight, { size: 16, style: { color: T.muted } })),
         expanded && (React.createElement("div", { className: "px-4 pb-4 pt-1 border-t", style: { borderColor: T.line } },
-            React.createElement("div", { className: `grid gap-3 mb-3 grid-cols-${Math.min(config.slots.length, 2)} ${config.slots.length === 3 ? "sm:grid-cols-3" : ""}` }, config.slots.map((slot) => (React.createElement(UploadSlot, { key: slot.key, label: slot.label, hint: slot.hint, file: files[slot.key], onFile: (f) => setFiles((prev) => ({ ...prev, [slot.key]: f })) })))),
-            error && (React.createElement("div", { className: "flex items-center gap-1.5 text-xs px-3 py-2 rounded-md mb-3", style: { background: T.dangerBg, color: T.danger } },
+            React.createElement("div", { className: "flex flex-wrap gap-3 mb-3", style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: ".75rem" } }, config.slots.map((slot) => (React.createElement(UploadSlot, { key: slot.key, label: slot.label, hint: slot.hint, file: files[slot.key], onFile: (f) => setFiles((prev) => { var _a; return Object.assign(Object.assign({}, prev), (_a = {}, _a[slot.key] = f, _a)); }) })))),
+            error && (React.createElement("div", { className: "flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg mb-3", style: { background: T.dangerBg, color: T.danger } },
                 React.createElement(AlertTriangle, { size: 13 }),
                 " ",
                 error)),
-            result && config.renderDetail(result)))));
+            loading && !hasResultInMap && (React.createElement("div", { className: "shimmer", style: { height: 48, borderRadius: 8 } }))))));
 }
 /* =========================================================================
    KONFIGURASI 6 INDIKATOR
@@ -18794,6 +18803,27 @@ const INDICATORS = [
     },
 ];
 /* =========================================================================
+   DETAIL PAGE PER INDIKATOR (dengan tombol kembali)
+   ========================================================================= */
+function DetailPage(_a) {
+    var config = _a.config, hasil = _a.hasil, periode = _a.periode, onBack = _a.onBack;
+    if (!hasil || !config) return null;
+    return (React.createElement("div", { className: "detail-page" },
+        React.createElement("button", { className: "back-btn", onClick: onBack },
+            React.createElement("span", null, "\u2190"),
+            " Kembali ke Dashboard"),
+        React.createElement("div", { className: "rounded-xl border overflow-hidden mb-4", style: { borderColor: T.line, background: T.card } },
+            React.createElement("div", { className: "px-4 py-3", style: { background: "linear-gradient(135deg, " + T.navy + " 0%, " + T.navyDeep + " 100%)" } },
+                React.createElement("div", { className: "flex items-center gap-3" },
+                    React.createElement("div", { className: "w-9 h-9 rounded-lg flex items-center justify-center shrink-0", style: { background: "rgba(255,255,255,.12)" } },
+                        React.createElement(config.icon, { size: 17, style: { color: T.goldSoft } })),
+                    React.createElement("div", null,
+                        React.createElement("div", { className: "text-sm font-semibold text-white" }, config.title),
+                        React.createElement("div", { className: "text-xs", style: { color: "#9FB3CC" } }, config.headline(hasil))))),
+            React.createElement("div", { className: "p-4" },
+                config.renderDetail(hasil)))));
+}
+/* =========================================================================
    DASHBOARD NILAI IKPA
    ========================================================================= */
 function IkpaDashboard(_a) {
@@ -18848,7 +18878,7 @@ function IkpaDashboard(_a) {
                 var Icon = ind.icon;
                 var valDisplay = ind.val !== null ? ind.val.toFixed(2) : "--";
                 var subtext = ind.hasData ? "Klik untuk lihat detail" : "Belum diupload";
-                return (React.createElement("div", { key: ind.id, className: "ikpa-card " + ind.tone, onClick: function () { return onIndicatorClick(ind.id); }, style: { animationDelay: "calc(" + idx + " * 50ms)" } },
+                return (React.createElement("div", { key: ind.id, className: "ikpa-card " + ind.tone, onClick: function () { if (onIndicatorClick) onIndicatorClick(ind.id); }, style: { animationDelay: "calc(" + idx + " * 50ms)" } },
                     React.createElement("div", { className: "ikpa-card-header" },
                         React.createElement("div", null,
                             React.createElement("div", { className: "ikpa-card-title" }, ind.title),
@@ -18876,6 +18906,13 @@ function KajianIKPAApp() {
     var btnLabel = selectedCfg ? selectedCfg.title : "Nama Indikator IKPA";
     var handleResult = function (id, res) { setResultsMap(function (prev) { var next = Object.assign({}, prev); next[id] = res; return next; }); };
     var allIndicatorsDone = INDICATORS.every(function (cfg) { return resultsMap[cfg.id] !== undefined && resultsMap[cfg.id] !== null; });
+    var handleBackToEmpty = function () { setSelectedId(null); setShowDashboard(false); };
+    var handleSelectIndicator = function (id) {
+        setDropdownOpen(false);
+        setSelectedId(id);
+        setShowDashboard(false);
+        setExpandedSet(function (prev) { var n = new Set(prev); n.add(id); return n; });
+    };
     const togglePanel = function (id) {
         setExpandedSet(function (prev) {
             var next = new Set(prev);
@@ -18902,11 +18939,7 @@ function KajianIKPAApp() {
                             React.createElement("div", { className: "nav-dropdown-menu" },
                                 INDICATORS.map(function (cfg) {
                                     var Icon = cfg.icon;
-                                    return (React.createElement("button", { key: cfg.id, className: "nav-dropdown-item", onClick: function () {
-                                            setDropdownOpen(false);
-                                            setSelectedId(cfg.id);
-                                            setExpandedSet(function (prev) { var n = new Set(prev); n.add(cfg.id); return n; });
-                                        } },
+                                    return (React.createElement("button", { key: cfg.id, className: "nav-dropdown-item", onClick: function () { handleSelectIndicator(cfg.id); } },
                                         React.createElement("div", { className: "item-icon" },
                                             React.createElement(Icon, { size: 14, style: { color: "var(--steel)" } })),
                                         cfg.title,
@@ -18924,17 +18957,18 @@ function KajianIKPAApp() {
                             p, " \u2014 ", BULAN_NAMA[p])); })))))),
         React.createElement("div", { style: { height: 3, background: "linear-gradient(90deg, " + T.gold + ", " + T.goldSoft + ", " + T.gold + ")" } }),
         React.createElement("div", { className: "px-6 py-6", style: { maxWidth: "1440px", margin: "0 auto" } },
-            showDashboard && allIndicatorsDone && (React.createElement(IkpaDashboard, { resultsMap: resultsMap, periode: periode, onIndicatorClick: function (id) { setShowDashboard(false); setSelectedId(id); setExpandedSet(function (prev) { var n = new Set(prev); n.add(id); return n; }); } })),
+            showDashboard && allIndicatorsDone && (React.createElement(IkpaDashboard, { resultsMap: resultsMap, periode: periode, onIndicatorClick: function (id) { handleSelectIndicator(id); } })),
             !showDashboard && !selectedId && (React.createElement("div", { className: "animate-in", style: { textAlign: "center", padding: "4rem 2rem" } },
                 React.createElement("div", { style: { fontSize: "2.5rem", marginBottom: ".75rem", opacity: .25 } }, "..."),
                 React.createElement("div", { className: "text-sm font-medium mb-1", style: { color: "var(--muted)" } }, "Belum ada indikator yang dipilih"),
                 React.createElement("div", { className: "text-xs", style: { color: "var(--muted)", opacity: .7 } }, "Klik tombol Nama Indikator IKPA di pojok kanan atas untuk memulai analisis"))),
-            !showDashboard && selectedId && selectedCfg && (React.createElement("div", { key: selectedId, id: "card-" + selectedId, className: "animate-in", style: { maxWidth: "900px", margin: "0 auto" } },
-                React.createElement(IndicatorCard, { config: selectedCfg, periode: periode, expanded: expandedSet.has(selectedId), onToggle: function () { return togglePanel(selectedId); }, onResult: handleResult }))),
+            !showDashboard && selectedId && selectedCfg && (React.createElement("div", { key: selectedId, style: { maxWidth: "900px", margin: "0 auto" } },
+                React.createElement(IndicatorCard, { config: selectedCfg, periode: periode, expanded: expandedSet.has(selectedId), onToggle: function () { return togglePanel(selectedId); }, onResult: handleResult, hasil: resultsMap[selectedId] || null }),
+                resultsMap[selectedId] && (React.createElement(DetailPage, { config: selectedCfg, hasil: resultsMap[selectedId], periode: periode, onBack: handleBackToEmpty })))),
             React.createElement("div", { className: "mt-6 text-xs text-center", style: { color: T.muted } }, "Satker BLU/dana khusus (423620) dikecualikan otomatis."))));
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(KajianIKPAApp));
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a200ff827b77d47d',t:'MTc4NDg3NTkwNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2015416c96b3f31',t:'MTc4NDg3OTM2OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
