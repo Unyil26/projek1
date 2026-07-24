@@ -17422,6 +17422,30 @@ const XLSXMini = (() => {
 </script>
 
 <script>
+/* ===== PARSER CSV SEDERHANA (tanpa dependency eksternal) ===== */
+function parseCSV(text, delimiter) {
+  if (delimiter === void 0) { delimiter = ";"; }
+  var lines = text.split(/\r?\n/);
+  return lines.map(function (line) {
+    var result = [];
+    var current = "";
+    var inQuotes = false;
+    for (var i = 0; i < line.length; i++) {
+      var ch = line[i];
+      if (ch === '"') {
+        inQuotes = !inQuotes;
+      } else if (ch === delimiter && !inQuotes) {
+        result.push(current.trim());
+        current = "";
+      } else {
+        current += ch;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  });
+}
+
 /* ===== Aplikasi Kajian IKPA (hasil transpile JSX -> JS) ===== */
 const { useState, useCallback, useRef, useEffect } = React;
 "use strict";
@@ -17828,26 +17852,100 @@ function analyzeUpTup(wbKppn, wbDetailTunai, wbDetailKkp, periode) {
     };
 }
 // ---- 6. Capaian Output ----
-function analyzeCapaianOutput(workbook, periode) {
-    const rows = sheetRows(workbook, "Data").slice(2);
-    const bulanTarget = String(parseInt(periode));
-    const allRecords = rows.filter((r) => r[0] != null && r[1] != null && !EXCLUDED_SATKER.has(String(r[1])) && r[4] != null)
-        .map((r) => ({ satker: String(r[1]), bulan: String(r[4]), ro: r[8], nilai: toNum(r[25]) }));
-    const records = allRecords.filter((r) => r.bulan === bulanTarget);
-    const rata2 = records.length ? records.reduce((a, r) => a + r.nilai, 0) / records.length : 0;
-    const tidak100 = records.filter((r) => r.nilai < 100).length;
-    const problemMap = {};
-    records.forEach((r) => { if (r.nilai < 100)
-        problemMap[r.satker] = (problemMap[r.satker] || 0) + (100 - r.nilai); });
-    const problem = Object.entries(problemMap).map(([s, v]) => ({ label: s, nilai_masalah: v }));
-    const periodeUrut = Array.from({ length: parseInt(periode) }, (_, i) => String(i + 1).padStart(2, "0"));
-    const series = periodeUrut.map((pr) => {
-        const sub = allRecords.filter((r) => r.bulan === String(parseInt(pr)));
-        return { periode: pr, nilai: sub.length ? sub.reduce((a, r) => a + r.nilai, 0) / sub.length : 0 };
+function analyzeCapaianOutput(wbKppn, wbSatker, periode) {
+    var _a, _b, _c;
+    var kppnAll = sheetRows(wbKppn, "Data");
+    var kppnData = [];
+    for (var i = 0; i < kppnAll.length; i++) {
+        var rr = kppnAll[i];
+        if (rr[0] != null && /^\d+$/.test(String(rr[0]).trim()) && rr[2] != null) {
+            kppnData.push({
+                no: String(rr[0]),
+                kppn: String(rr[1]),
+                periode: String(rr[2]).trim(),
+                rataCapaianRO: toNum(rr[3]),
+                rataKetepatanWaktu: toNum(rr[4]),
+                nilai: toNum(rr[5])
+            });
+        }
+    }
+    kppnData.sort(function (a, b) { return a.periode.localeCompare(b.periode); });
+    var now = kppnData.find(function (r) { return r.periode === periode; }) || {};
+    var series = kppnData.filter(function (s) { return s.periode <= periode; }).map(function (s) { return ({ periode: s.periode, nilai: s.nilai }); });
+    var satkerRows = sheetRows(wbSatker, "Data");
+    var startIdx = 0;
+    for (var i = 0; i < Math.min(satkerRows.length, 10); i++) {
+        if (satkerRows[i][0] != null && /^\d+$/.test(String(satkerRows[i][0]).trim())) {
+            startIdx = i;
+            break;
+        }
+    }
+    var bulanTarget = String(parseInt(periode));
+    var allRecords = [];
+    for (var i = startIdx; i < satkerRows.length; i++) {
+        var r = satkerRows[i];
+        if (r[0] != null && String(r[0]).trim() === "Total Nilai") break;
+        if (r[0] == null || r[1] == null || r[4] == null) continue;
+        if (!/^\d+$/.test(String(r[0]).trim())) continue;
+        var satker = String(r[1]).trim();
+        if (EXCLUDED_SATKER.has(satker)) continue;
+        var bulan = String(r[4]).trim();
+        if (bulan !== bulanTarget) continue;
+        allRecords.push({
+            satker: satker,
+            namaSatker: r[2] || "",
+            bulan: bulan,
+            ro: r[8] || "",
+            uraianRO: r[9] || "",
+            nilai: toNum(r[25]),
+            pagu: toNum(r[10]),
+            realisasi: toNum(r[11]),
+            realisasiRO: toNum(r[15]),
+            progressRO: toNum(r[16])
+        });
+    }
+    var records = allRecords;
+    var rata2 = records.length ? records.reduce(function (a, r) { return a + r.nilai; }, 0) / records.length : 0;
+    var tidak100 = records.filter(function (r) { return r.nilai < 100; }).length;
+    var problemMap = {};
+    records.forEach(function (r) {
+        if (r.nilai < 100)
+            problemMap[r.satker] = (problemMap[r.satker] || 0) + (100 - r.nilai);
     });
+    var problem = Object.entries(problemMap).map(function (_a) {
+        var s = _a[0], v = _a[1];
+        return { label: s, nilai_masalah: v };
+    });
+    var bulanList = ["1", "2", "3", "4", "5", "6"];
+    var satkerSeries = bulanList.map(function (pr) {
+        var sub = [];
+        for (var i = startIdx; i < satkerRows.length; i++) {
+            var r2 = satkerRows[i];
+            if (r2[0] != null && String(r2[0]).trim() === "Total Nilai") break;
+            if (r2[0] == null || r2[1] == null || r2[4] == null) continue;
+            if (!/^\d+$/.test(String(r2[0]).trim())) continue;
+            if (EXCLUDED_SATKER.has(String(r2[1]).trim())) continue;
+            if (String(r2[4]).trim() !== pr) continue;
+            sub.push(toNum(r2[25]));
+        }
+        return {
+            periode: pr.padStart(2, "0"),
+            nilai: sub.length ? sub.reduce(function (a, b) { return a + b; }, 0) / sub.length : 0
+        };
+    });
+    var finalSeries = series.length > 0 ? series : satkerSeries;
     return {
-        indikator: "Capaian Output", periode, jumlahRo: records.length, rata2, tidak100,
-        pareto: paretoAnalysis(problem), series,
+        indikator: "Capaian Output",
+        periode: periode,
+        jumlahRo: records.length,
+        rata2: rata2,
+        tidak100: tidak100,
+        nilaiKppn: (_a = now.nilai) !== null && _a !== void 0 ? _a : 0,
+        rataCapaianRO: (_b = now.rataCapaianRO) !== null && _b !== void 0 ? _b : rata2,
+        rataKetepatanWaktu: (_c = now.rataKetepatanWaktu) !== null && _c !== void 0 ? _c : 0,
+        pareto: paretoAnalysis(problem),
+        series: finalSeries,
+        records: records
     };
 }
 // ---- 7. Revisi DIPA ----
@@ -18097,26 +18195,29 @@ function narasiUpTup(r) {
     return { paragraf, rekomendasi };
 }
 function narasiCapaianOutput(r) {
-    const paragraf = [];
-    const bulan = BULAN_NAMA[r.periode] || r.periode;
-    paragraf.push(`Indikator Capaian Output KPPN Pekalongan pada periode ${bulan} mencatat rata-rata capaian Rincian Output (RO) sebesar ${r.rata2.toFixed(2)}, `
-        + `dari ${r.jumlahRo} RO yang dievaluasi, dengan ${r.tidak100} RO yang belum mencapai nilai maksimal.`);
+    var paragraf = [];
+    var bulan = BULAN_NAMA[r.periode] || r.periode;
+    var nilaiTampil = r.nilaiKppn || r.rata2;
+    paragraf.push("Indikator Capaian Output KPPN Pekalongan pada periode " + bulan + " mencatat nilai IKPA sebesar " + nilaiTampil.toFixed(2) + ", "
+        + "dengan rata-rata capaian Rincian Output (RO) sebesar " + r.rata2.toFixed(2) + " "
+        + "dari " + r.jumlahRo + " RO yang dievaluasi, dengan " + r.tidak100 + " RO yang belum mencapai nilai maksimal. "
+        + "Rata-rata ketepatan waktu pelaporan mencapai " + (r.rataKetepatanWaktu || 0).toFixed(2) + "%.");
     if (r.pareto.totalEntitas > 0 && r.pareto.vitalFew.length) {
-        paragraf.push(`Satker dengan RO bermasalah terbanyak adalah ${r.pareto.vitalFew.map((s) => s.label).join(", ")}. `
-            + `Satker-satker ini perlu dibina dan didampingi dalam penyusunan laporan capaian output.`);
+        paragraf.push("Satker dengan RO bermasalah terbanyak adalah " + r.pareto.vitalFew.map(function (s) { return s.label; }).join(", ") + ". "
+            + "Satker-satker ini perlu dibina dan didampingi dalam penyusunan laporan capaian output.");
     }
     else if (r.tidak100 === 0) {
-        paragraf.push(`Seluruh RO yang dievaluasi telah mencapai nilai maksimal pada periode ini.`);
+        paragraf.push("Seluruh RO yang dievaluasi telah mencapai nilai maksimal pada periode ini.");
     }
-    const rekomendasi = r.tidak100 > 0
-        ? `Lakukan pendampingan penyusunan laporan capaian output kepada satker-satker di atas agar RO dapat mencapai nilai maksimal pada periode berikutnya.`
-        : `Pertahankan ketertiban pelaporan capaian output pada seluruh satker.`;
+    var rekomendasi = r.tidak100 > 0
+        ? "Lakukan pendampingan penyusunan laporan capaian output kepada satker-satker di atas agar RO dapat mencapai nilai maksimal pada periode berikutnya."
+        : "Pertahankan ketertiban pelaporan capaian output pada seluruh satker.";
     if (r.series) {
-        const _tren = narasiTren(r.series);
+        var _tren = narasiTren(r.series);
         if (_tren)
             paragraf.push(_tren);
     }
-    return { paragraf, rekomendasi };
+    return { paragraf: paragraf, rekomendasi: rekomendasi };
 }
 function narasiRevisi(r) {
     const paragraf = [];
@@ -18146,7 +18247,24 @@ function narasiRevisi(r) {
     }
     return { paragraf, rekomendasi: rekomendasiRevisi };
 }
+function readCSVFile(file) {
+    return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            try {
+                var rows = parseCSV(e.target.result);
+                resolve({ SheetNames: ["Data"], Sheets: { Data: rows } });
+            }
+            catch (err) { reject(err); }
+        };
+        reader.onerror = reject;
+        reader.readAsText(file, "utf-8");
+    });
+}
 function readWorkbook(file) {
+    var name = (file.name || "").toLowerCase();
+    if (name.endsWith(".csv"))
+        return readCSVFile(file);
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = async (e) => {
@@ -18186,8 +18304,8 @@ function UploadSlot({ label, hint, file, onFile, error }) {
                 color: file ? T.success : T.muted,
             } },
             React.createElement(Upload, { size: 14 }),
-            React.createElement("span", { className: "truncate" }, file ? file.name : hint || "Pilih file .xlsx")),
-        React.createElement("input", { ref: inputRef, type: "file", accept: ".xlsx,.xls", className: "hidden", onChange: (e) => { if (e.target.files[0])
+            React.createElement("span", { className: "truncate" }, file ? file.name : hint || "Pilih file .xlsx/.csv")),
+        React.createElement("input", { ref: inputRef, type: "file", accept: ".xlsx,.xls,.csv", className: "hidden", onChange: (e) => { if (e.target.files[0])
                 onFile(e.target.files[0]); } }),
         error && React.createElement("div", { className: "text-xs mt-1", style: { color: T.danger } }, error)));
 }
@@ -18518,14 +18636,18 @@ const INDICATORS = [
     },
     {
         id: "capaian", title: "Capaian Output", icon: Target,
-        slots: [{ key: "main", label: "File Capaian Output", hint: "Detail Indikator Kinerja Detail Capaian RO.xlsx" }],
-        analyze: (wb, periode) => analyzeCapaianOutput(wb.main, periode),
+        slots: [
+            { key: "kppn", label: "File level KPPN (agregat per bulan)", hint: "Detail Indikator Kinerja Capaian Output_KPPN.csv" },
+            { key: "satker", label: "File level Satker (rincian RO)", hint: "SATKER.csv" },
+        ],
+        analyze: (wb, periode) => analyzeCapaianOutput(wb.kppn, wb.satker, periode),
         headline: (r) => `${r.jumlahRo} RO dievaluasi, ${r.tidak100} belum 100`,
         headlineValue: (r) => r.rata2.toFixed(2),
         tone: (r) => (r.rata2 >= 95 ? "success" : r.rata2 >= 85 ? "gold" : "danger"),
         renderDetail: (r) => (React.createElement("div", null,
             React.createElement(AnalysisBox, { narasi: narasiCapaianOutput(r) }),
             React.createElement(TrendChart, { series: r.series, title: "Tren Rata-rata Capaian Output", unit: "" }),
+            React.createElement("div", { className: "text-xs mb-2", style: { color: T.muted } }, "Nilai KPPN: " + (r.nilaiKppn || 0).toFixed(2) + "  ·  Rata-rata Capaian RO: " + r.rataCapaianRO.toFixed(2) + "  ·  Rata-rata Ketepatan Waktu: " + r.rataKetepatanWaktu.toFixed(2)),
             React.createElement(ParetoTable, { pareto: r.pareto, unit: "float" }))),
     },
     {
@@ -18591,5 +18713,5 @@ function KajianIKPAApp() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(KajianIKPAApp));
 </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a1ff64e0fd81f93f',t:'MTc4NDg1OTA4NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
