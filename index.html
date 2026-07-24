@@ -18423,16 +18423,24 @@ function IndicatorCard(_a) { var config = _a.config, periode = _a.periode, expan
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const allFilesReady = config.slots.every((s) => files[s.key]);
-    const runAnalysis = useCallback(async () => {
+    var configRef = useRef(config);
+    configRef.current = config;
+    var onResultRef = useRef(onResult);
+    onResultRef.current = onResult;
+    const runAnalysis = useCallback(async function () {
+        var cfg = configRef.current;
+        var onRes = onResultRef.current;
         setLoading(true);
         setError(null);
         try {
-            const workbooks = {};
-            for (const slot of config.slots)
+            var workbooks = {};
+            for (var _i = 0, _a = cfg.slots; _i < _a.length; _i++) {
+                var slot = _a[_i];
                 workbooks[slot.key] = await readWorkbook(files[slot.key]);
-            const res = config.analyze(workbooks, periode);
+            }
+            var res = cfg.analyze(workbooks, periode);
             setResult(res);
-            if (onResult) onResult(config.id, res);
+            if (onRes) onRes(cfg.id, res);
         }
         catch (e) {
             setError("Gagal membaca file — pastikan struktur sheet sesuai format MyIntress.");
@@ -18441,7 +18449,7 @@ function IndicatorCard(_a) { var config = _a.config, periode = _a.periode, expan
         finally {
             setLoading(false);
         }
-    }, [files, periode, config]);
+    }, [files, periode]);
 
     var prevFilesRef = useRef(null);
     React.useEffect(function () {
@@ -18777,12 +18785,12 @@ function KajianIKPAApp() {
                 React.createElement("div", { style: { fontSize: "2.5rem", marginBottom: ".75rem", opacity: .25 } }, "..."),
                 React.createElement("div", { className: "text-sm font-medium mb-1", style: { color: "var(--muted)" } }, "Belum ada indikator yang dipilih"),
                 React.createElement("div", { className: "text-xs", style: { color: "var(--muted)", opacity: .7 } }, "Klik tombol Nama Indikator IKPA di pojok kanan atas untuk memulai analisis"))),
-            selectedId && selectedCfg && (React.createElement("div", { id: "card-" + selectedId, className: "animate-in", style: { maxWidth: "900px", margin: "0 auto" } },
+            selectedId && selectedCfg && (React.createElement("div", { key: selectedId, id: "card-" + selectedId, className: "animate-in", style: { maxWidth: "900px", margin: "0 auto" } },
                 React.createElement(IndicatorCard, { config: selectedCfg, periode: periode, expanded: expandedSet.has(selectedId), onToggle: function () { return togglePanel(selectedId); }, onResult: handleResult }))),
             React.createElement("div", { className: "mt-6 text-xs text-center", style: { color: T.muted } }, "Satker BLU/dana khusus (423620) dikecualikan otomatis."))));
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(KajianIKPAApp));
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a20002539c42c49b',t:'MTc4NDg2NTUzNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2000ced6dddcde2',t:'MTc4NDg2NTk2OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
