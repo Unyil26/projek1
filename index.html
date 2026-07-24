@@ -18714,11 +18714,11 @@ const INDICATORS = [
         ],
         analyze: (wb, periode) => analyzeCapaianOutput(wb.kppn, wb.satker, periode),
         headline: (r) => `${r.jumlahRo} RO dievaluasi, ${r.tidak100} belum 100`,
-        headlineValue: (r) => r.rata2.toFixed(2),
-        tone: (r) => (r.rata2 >= 95 ? "success" : r.rata2 >= 85 ? "gold" : "danger"),
+        headlineValue: (r) => (r.nilaiKppn || r.rata2).toFixed(2),
+        tone: (r) => ((r.nilaiKppn || r.rata2) >= 95 ? "success" : (r.nilaiKppn || r.rata2) >= 85 ? "gold" : "danger"),
         renderDetail: (r) => (React.createElement("div", null,
             React.createElement(AnalysisBox, { narasi: narasiCapaianOutput(r) }),
-            React.createElement(TrendChart, { series: r.series, title: "Tren Rata-rata Capaian Output", unit: "" }),
+            React.createElement(TrendChart, { series: r.series, title: "Tren Nilai IKPA Capaian Output", unit: "" }),
             React.createElement("div", { className: "text-xs mb-2", style: { color: T.muted } }, "Nilai KPPN: " + (r.nilaiKppn || 0).toFixed(2) + "  ·  Rata-rata Capaian RO: " + r.rataCapaianRO.toFixed(2) + "  ·  Rata-rata Ketepatan Waktu: " + r.rataKetepatanWaktu.toFixed(2)),
             React.createElement(ParetoTable, { pareto: r.pareto, unit: "float" }))),
     },
@@ -18792,5 +18792,5 @@ function KajianIKPAApp() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(KajianIKPAApp));
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a200df658c153e13',t:'MTc4NDg3NDU4OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a200f22c4fe7fe0d',t:'MTc4NDg3NTM1OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
