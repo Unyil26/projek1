@@ -31,6 +31,76 @@
   .nav-dropdown-item:hover .item-icon { background: #DEE4EC; }
   .nav-dropdown-item .item-badge { margin-left: auto; font-family: 'IBM Plex Mono', monospace; font-size: .6875rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: #EEF1F5; color: var(--muted); }
   .nav-dropdown-backdrop { position: fixed; inset: 0; z-index: 99; }
+  /* DASHBOARD */
+  .ikpa-dashboard { padding: 1.5rem 0; }
+  .ikpa-hero {
+    display: flex; align-items: center; gap: 1.5rem; padding: 1.5rem 1.75rem;
+    border-radius: 14px; margin-bottom: 1.25rem;
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navyDeep) 100%);
+    color: #fff; box-shadow: 0 6px 24px rgba(15,37,64,.18);
+    animation: fadeIn .5s ease-out both;
+  }
+  .ikpa-hero-score {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    width: 100px; height: 100px; border-radius: 50%; flex-shrink: 0;
+    background: rgba(255,255,255,.1); border: 3px solid var(--gold);
+    box-shadow: 0 0 20px rgba(201,154,61,.25);
+  }
+  .ikpa-hero-score .big-num { font-size: 1.65rem; font-weight: 700; font-family: 'IBM Plex Mono', monospace; }
+  .ikpa-hero-score .label { font-size: .625rem; text-transform: uppercase; letter-spacing: .08em; opacity: .7; margin-top: .125rem; }
+  .ikpa-hero-info { flex: 1; min-width: 0; }
+  .ikpa-hero-info h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: .25rem; }
+  .ikpa-hero-info p { font-size: .75rem; opacity: .75; line-height: 1.5; }
+  .ikpa-card-grid {
+    display: grid; gap: .875rem;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  }
+  .ikpa-card {
+    background: var(--card); border-radius: 12px; border: 1px solid var(--line);
+    padding: 1.125rem 1.25rem; cursor: pointer; transition: all .2s;
+    box-shadow: var(--shadow-sm); animation: fadeIn .4s ease-out both;
+    position: relative; overflow: hidden;
+  }
+  .ikpa-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); border-color: #C8D2DF; }
+  .ikpa-card::before {
+    content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+  }
+  .ikpa-card.success::before { background: var(--success); }
+  .ikpa-card.warning::before { background: var(--gold); }
+  .ikpa-card.danger::before { background: var(--danger); }
+  .ikpa-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: .5rem; }
+  .ikpa-card-header .card-icon {
+    width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .ikpa-card-title { font-size: .8125rem; font-weight: 600; color: var(--ink); margin-bottom: .125rem; }
+  .ikpa-card-subtitle { font-size: .6875rem; color: var(--muted); line-height: 1.4; }
+  .ikpa-card-value {
+    font-family: 'IBM Plex Mono', monospace; font-size: 1.5rem; font-weight: 700; text-align: right;
+  }
+  .ikpa-card-value.success { color: var(--success); }
+  .ikpa-card-value.warning { color: #8A6A1E; }
+  .ikpa-card-value.danger { color: var(--danger); }
+  .ikpa-card-bar {
+    margin-top: .75rem; height: 6px; border-radius: 3px; background: #EEF1F5; overflow: hidden;
+  }
+  .ikpa-card-bar-fill { height: 100%; border-radius: 3px; transition: width .6s ease-out; }
+  .ikpa-card-bar-fill.success { background: var(--success); }
+  .ikpa-card-bar-fill.warning { background: var(--gold); }
+  .ikpa-card-bar-fill.danger { background: var(--danger); }
+  .ikpa-status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: .375rem; }
+  .ikpa-btn-dashboard {
+    display: inline-flex; align-items: center; gap: .5rem; padding: .55rem 1.1rem;
+    border-radius: 8px; border: 1.5px solid rgba(255,255,255,.2);
+    background: rgba(255,255,255,.08); color: #fff; font-size: .8125rem; font-weight: 500;
+    cursor: pointer; transition: all .2s; white-space: nowrap;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  .ikpa-btn-dashboard:hover { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.35); }
+  .ikpa-btn-dashboard.active { background: rgba(201,154,61,.2); border-color: var(--gold); color: var(--goldSoft); }
+  .ikpa-section-title {
+    font-size: .6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); padding: .75rem .25rem .5rem;
+  }
   .flex { display: flex; } .grid { display: grid; } .hidden { display: none; }
   .flex-1 { flex: 1 1 0%; } .flex-wrap { flex-wrap: wrap; }
   .items-center { align-items: center; } .items-baseline { align-items: baseline; }
@@ -18724,6 +18794,75 @@ const INDICATORS = [
     },
 ];
 /* =========================================================================
+   DASHBOARD NILAI IKPA
+   ========================================================================= */
+function IkpaDashboard(_a) {
+    var resultsMap = _a.resultsMap, periode = _a.periode, onIndicatorClick = _a.onIndicatorClick;
+    var indicators = INDICATORS.map(function (cfg) {
+        var r = resultsMap[cfg.id];
+        var val = null;
+        if (r) {
+            if (cfg.id === "tagihan") val = r.pctTepat || 0;
+            else if (cfg.id === "capaian") val = r.nilaiKppn || r.rata2 || 0;
+            else if (typeof r.nilai === "number") val = r.nilai;
+            else if (typeof r.rata2 === "number") val = r.rata2;
+        }
+        var tone = "success";
+        if (val !== null) {
+            if (val >= 95) tone = "success";
+            else if (val >= 85) tone = "warning";
+            else tone = "danger";
+        }
+        return { id: cfg.id, title: cfg.title, icon: cfg.icon, val: val, tone: tone, hasData: r !== null && r !== undefined };
+    });
+    var allDone = indicators.every(function (i) { return i.hasData; });
+    var average = null;
+    var countWithData = indicators.filter(function (i) { return i.val !== null; }).length;
+    if (countWithData > 0) {
+        var sum = indicators.reduce(function (a, i) { return a + (i.val || 0); }, 0);
+        average = sum / countWithData;
+    }
+    var avgTone = "success";
+    if (average !== null) {
+        if (average >= 95) avgTone = "success";
+        else if (average >= 85) avgTone = "warning";
+        else avgTone = "danger";
+    }
+    var completed = indicators.filter(function (i) { return i.hasData; }).length;
+    var total = indicators.length;
+    var bulan = BULAN_NAMA[periode] || periode;
+    return (React.createElement("div", { className: "ikpa-dashboard" },
+        React.createElement("div", { className: "ikpa-hero" },
+            React.createElement("div", { className: "ikpa-hero-score" },
+                React.createElement("span", { className: "big-num" }, average !== null ? average.toFixed(1) : "--"),
+                React.createElement("span", { className: "label" }, "Rata-rata IKPA")),
+            React.createElement("div", { className: "ikpa-hero-info" },
+                React.createElement("h2", null, "Dashboard Nilai IKPA KPPN Pekalongan"),
+                React.createElement("p", null,
+                    "Periode ", bulan, " — ",
+                    completed, " dari ", total, " indikator telah dianalisis",
+                    allDone ? ". Seluruh indikator tersedia." : ". Upload indikator yang belum tersedia untuk melengkapi dashboard."))),
+        React.createElement("div", { className: "ikpa-section-title" }, "Nilai per Indikator"),
+        React.createElement("div", { className: "ikpa-card-grid" },
+            indicators.map(function (ind, idx) {
+                var Icon = ind.icon;
+                var valDisplay = ind.val !== null ? ind.val.toFixed(2) : "--";
+                var subtext = ind.hasData ? "Klik untuk lihat detail" : "Belum diupload";
+                return (React.createElement("div", { key: ind.id, className: "ikpa-card " + ind.tone, onClick: function () { return onIndicatorClick(ind.id); }, style: { animationDelay: "calc(" + idx + " * 50ms)" } },
+                    React.createElement("div", { className: "ikpa-card-header" },
+                        React.createElement("div", null,
+                            React.createElement("div", { className: "ikpa-card-title" }, ind.title),
+                            React.createElement("div", { className: "ikpa-card-subtitle" },
+                                React.createElement("span", { className: "ikpa-status-dot", style: { background: ind.hasData ? "var(--" + ind.tone + ")" : "var(--muted)" } }),
+                                subtext)),
+                        React.createElement("div", { className: "card-icon", style: { background: ind.hasData ? "#EEF1F5" : "#F5F6F9" } },
+                            React.createElement(Icon, { size: 16, style: { color: ind.hasData ? "var(--steel)" : "var(--muted)", opacity: ind.hasData ? 1 : .5 } }))),
+                    React.createElement("div", { className: "ikpa-card-value " + (ind.val !== null ? ind.tone : ""), style: { opacity: ind.hasData ? 1 : .3 } }, valDisplay),
+                    React.createElement("div", { className: "ikpa-card-bar" },
+                        React.createElement("div", { className: "ikpa-card-bar-fill " + ind.tone, style: { width: ind.val !== null ? Math.min(100, ind.val) + "%" : "0%" } }))));
+            }))));
+}
+/* =========================================================================
    APP
    ========================================================================= */
 function KajianIKPAApp() {
@@ -18732,9 +18871,11 @@ function KajianIKPAApp() {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [selectedId, setSelectedId] = useState(null);
     const [resultsMap, setResultsMap] = useState({});
+    const [showDashboard, setShowDashboard] = useState(false);
     var selectedCfg = selectedId ? INDICATORS.find(function (c) { return c.id === selectedId; }) : null;
     var btnLabel = selectedCfg ? selectedCfg.title : "Nama Indikator IKPA";
     var handleResult = function (id, res) { setResultsMap(function (prev) { var next = Object.assign({}, prev); next[id] = res; return next; }); };
+    var allIndicatorsDone = INDICATORS.every(function (cfg) { return resultsMap[cfg.id] !== undefined && resultsMap[cfg.id] !== null; });
     const togglePanel = function (id) {
         setExpandedSet(function (prev) {
             var next = new Set(prev);
@@ -18776,21 +18917,24 @@ function KajianIKPAApp() {
                                             resultsMap[cfg.id].rata2 ? resultsMap[cfg.id].rata2.toFixed(1) : "-"
                                         )) : null));
                                 }))),
+                        allIndicatorsDone && (React.createElement("button", { className: "ikpa-btn-dashboard" + (showDashboard ? " active" : ""), onClick: function () { setShowDashboard(function (v) { return !v; }); setSelectedId(null); } },
+                            "Dashboard IKPA")),
                         React.createElement("span", { className: "text-xs", style: { color: "#9FB3CC" } }, "Periode"),
                         React.createElement("select", { value: periode, onChange: function (e) { return setPeriode(e.target.value); }, className: "px-3 py-2 rounded-lg text-sm font-medium border-0 outline-none", style: { background: "rgba(255,255,255,0.1)", color: "white", fontFamily: "'IBM Plex Mono', monospace" } }, Object.keys(BULAN_NAMA).map(function (p) { return (React.createElement("option", { key: p, value: p, style: { color: T.ink } },
                             p, " \u2014 ", BULAN_NAMA[p])); })))))),
         React.createElement("div", { style: { height: 3, background: "linear-gradient(90deg, " + T.gold + ", " + T.goldSoft + ", " + T.gold + ")" } }),
         React.createElement("div", { className: "px-6 py-6", style: { maxWidth: "1440px", margin: "0 auto" } },
-            !selectedId && (React.createElement("div", { className: "animate-in", style: { textAlign: "center", padding: "4rem 2rem" } },
+            showDashboard && allIndicatorsDone && (React.createElement(IkpaDashboard, { resultsMap: resultsMap, periode: periode, onIndicatorClick: function (id) { setShowDashboard(false); setSelectedId(id); setExpandedSet(function (prev) { var n = new Set(prev); n.add(id); return n; }); } })),
+            !showDashboard && !selectedId && (React.createElement("div", { className: "animate-in", style: { textAlign: "center", padding: "4rem 2rem" } },
                 React.createElement("div", { style: { fontSize: "2.5rem", marginBottom: ".75rem", opacity: .25 } }, "..."),
                 React.createElement("div", { className: "text-sm font-medium mb-1", style: { color: "var(--muted)" } }, "Belum ada indikator yang dipilih"),
                 React.createElement("div", { className: "text-xs", style: { color: "var(--muted)", opacity: .7 } }, "Klik tombol Nama Indikator IKPA di pojok kanan atas untuk memulai analisis"))),
-            selectedId && selectedCfg && (React.createElement("div", { key: selectedId, id: "card-" + selectedId, className: "animate-in", style: { maxWidth: "900px", margin: "0 auto" } },
+            !showDashboard && selectedId && selectedCfg && (React.createElement("div", { key: selectedId, id: "card-" + selectedId, className: "animate-in", style: { maxWidth: "900px", margin: "0 auto" } },
                 React.createElement(IndicatorCard, { config: selectedCfg, periode: periode, expanded: expandedSet.has(selectedId), onToggle: function () { return togglePanel(selectedId); }, onResult: handleResult }))),
             React.createElement("div", { className: "mt-6 text-xs text-center", style: { color: T.muted } }, "Satker BLU/dana khusus (423620) dikecualikan otomatis."))));
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(KajianIKPAApp));
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a200f22c4fe7fe0d',t:'MTc4NDg3NTM1OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a200ff827b77d47d',t:'MTc4NDg3NTkwNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
