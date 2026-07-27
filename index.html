@@ -135,6 +135,18 @@
   .text-\[11px\]{font-size:11px;} .text-white{color:#fff;}
   .uppercase{text-transform:uppercase;} .tracking-wide{letter-spacing:.025em;} .tracking-\[0\.15em\]{letter-spacing:.15em;}
   .tabular-nums{font-variant-numeric:tabular-nums;}
+
+  /* DETAIL PAGE */
+  .detail-page { max-width: 900px; margin: 0 auto; animation: fadeIn .35s ease-out both; }
+  .back-btn {
+    display: inline-flex; align-items: center; gap: .4rem; padding: .45rem .9rem;
+    border-radius: 7px; border: 1px solid var(--line); background: var(--card); color: var(--steel);
+    font-size: .8125rem; font-weight: 500; cursor: pointer; margin-bottom: .75rem;
+    transition: all .15s; font-family: 'Inter', system-ui, sans-serif;
+  }
+  .back-btn:hover { background: #EEF1F5; border-color: #C8D2DF; }
+  .back-btn span { font-size: 1rem; line-height: 1; }
+
   .outline-none{outline:none;} .transition-colors{transition-property:color,background-color,border-color;transition-duration:150ms;}
 </style>
 </head>
@@ -17932,16 +17944,20 @@ function analyzeUpTup(wbKppn, wbDetailTunai, wbDetailKkp, periode) {
     // -- Komponen KKP, level satker, periode terkini, excl BLU --
     const kkpRows = sheetRows(wbDetailKkp, "Data").slice(3);
     const kkpNow = kkpRows.filter((r) => r[0] != null && r[2] != null && String(r[1]) === periode && !EXCLUDED_SATKER.has(String(r[2])))
-        .map((r) => ({ satker: String(r[2]), nama: r[3], targetKkp: toNum(r[7]), penggunaanKkp: toNum(r[8]), nilai: toNum(r[9]) }));
+        .map((r) => ({ satker: String(r[2]), nama: r[3], targetKkp: toNum(r[7]), penggunaanKkp: toNum(r[8]), nilai: toNum(r[9]), upKkpBulan: toNum(r[5]) }));
     const kkpShortfall = paretoAnalysis(kkpNow.map((r) => ({ label: r.satker, nilai_masalah: Math.max(0, r.targetKkp - r.penggunaanKkp) })));
     const kkpPenopang = [...kkpNow].filter((r) => r.targetKkp > 0 && r.penggunaanKkp > r.targetKkp)
         .sort((a, b) => (b.penggunaanKkp - b.targetKkp) - (a.penggunaanKkp - a.targetKkp)).slice(0, 6);
+    var kkpNoTransaction = [];
+    var kkpNoTransactionDetail = [];
+    kkpNow.forEach(function (r2) { if (r2.upKkpBulan > 0 && r2.penggunaanKkp === 0) { kkpNoTransaction.push(r2.satker); kkpNoTransactionDetail.push({ satker: r2.satker, nama: r2.nama, targetKkp: r2.targetKkp, upKkpBulan: r2.upKkpBulan }); } });
+    kkpNoTransaction.sort();
     return {
         indikator: "Pengelolaan UP dan TUP", periode, nilai: (_a = now.nilaiIkpa) !== null && _a !== void 0 ? _a : 0,
         tunai: (_b = now.tunai) !== null && _b !== void 0 ? _b : 0, kkp: (_c = now.kkp) !== null && _c !== void 0 ? _c : 0, targetKkpTotal: (_d = now.targetKkp) !== null && _d !== void 0 ? _d : 0, penggunaanKkpTotal: (_e = now.penggunaanKkp) !== null && _e !== void 0 ? _e : 0,
         sub: { ketepatanWaktu: (_f = now.ketepatanWaktu) !== null && _f !== void 0 ? _f : 0, gup: (_g = now.gup) !== null && _g !== void 0 ? _g : 0, setoranTup: (_h = now.setoranTup) !== null && _h !== void 0 ? _h : 0 },
         timeSeries: kppnSeries, pareto: paretoAnalysis(problem),
-        kkpShortfall, kkpPenopang, gupTerendah, gupShortfall,
+        kkpShortfall, kkpPenopang, gupTerendah, gupShortfall, kkpNoTransaction: kkpNoTransaction, kkpNoTransactionDetail: kkpNoTransactionDetail,
         series: kppnSeries.filter((s) => s.periode <= periode).map((s) => ({ periode: s.periode, nilai: s.nilaiIkpa })),
     };
 }
@@ -18279,6 +18295,9 @@ function narasiUpTup(r) {
     if (r.kkpShortfall.totalEntitas > 0 && r.kkpShortfall.vitalFew.length) {
         paragraf.push(`Sementara pada komponen KKP, satker dengan penggunaan di bawah target: ${r.kkpShortfall.vitalFew.map((s) => s.label).join(", ")}.`);
     }
+    if (r.kkpNoTransaction && r.kkpNoTransaction.length > 0) {
+        paragraf.push("Perlu perhatian khusus: terdapat " + r.kkpNoTransaction.length + " satker yang sama sekali belum melakukan transaksi KKP pada periode ini, yaitu " + r.kkpNoTransaction.join(", ") + ". Satker-satker ini tidak memberikan kontribusi sama sekali terhadap capaian komponen KKP.");
+    }
     const rekomendasi = `Fokus monev diarahkan pada peningkatan kualitas revolving UP (khususnya satker dengan % GUP Disebulankan rendah), ketepatan waktu pengajuan GUP, `
         + `dan menjaga penggunaan KKP tetap di atas target pada satker-satker yang disebutkan di atas.`;
     if (r.series) {
@@ -18541,14 +18560,14 @@ function IndicatorCard(_a) { var config = _a.config, periode = _a.periode, expan
             result && !loading && React.createElement(StatPill, { value: config.headlineValue(result), tone: config.tone(result) }),
             expanded ? React.createElement(ChevronDown, { size: 16, style: { color: T.muted } }) : React.createElement(ChevronRight, { size: 16, style: { color: T.muted } })),
         expanded && (React.createElement("div", { className: "px-4 pb-4 pt-1 border-t", style: { borderColor: T.line } },
-            React.createElement("div", { className: "flex flex-wrap gap-3 mb-3", style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: ".75rem" } }, config.slots.map(function (slot) { return (React.createElement(UploadSlot, { key: slot.key, label: slot.label, hint: slot.hint, file: files[slot.key], onFile: function (f) { return setFiles(function (prev) { var _a; return Object.assign(Object.assign({}, prev), (_a = {}, _a[slot.key] = f, _a)); }); } })); })),
-            error && (React.createElement("div", { className: "flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg mb-3", style: { background: T.dangerBg, color: T.danger } },
+            React.createElement("div", { className: `grid gap-3 mb-3 grid-cols-${Math.min(config.slots.length, 2)} ${config.slots.length === 3 ? "sm:grid-cols-3" : ""}` }, config.slots.map((slot) => (React.createElement(UploadSlot, { key: slot.key, label: slot.label, hint: slot.hint, file: files[slot.key], onFile: (f) => setFiles((prev) => ({ ...prev, [slot.key]: f })) })))),
+            error && (React.createElement("div", { className: "flex items-center gap-1.5 text-xs px-3 py-2 rounded-md mb-3", style: { background: T.dangerBg, color: T.danger } },
                 React.createElement(AlertTriangle, { size: 13 }),
                 " ",
                 error)),
-            result && !result.error && (React.createElement("div", { className: "flex items-center gap-2 pt-2 border-t", style: { borderColor: T.line } },
+            result && React.createElement("div", { className: "flex items-center gap-2 pt-2 border-t", style: { borderColor: T.line } },
                 React.createElement(CheckCircle2, { size: 14, style: { color: T.success } }),
-                React.createElement("span", { className: "text-xs", style: { color: T.muted } }, "Analisis berhasil. Lihat detail di Dashboard.")))))));
+                React.createElement("span", { className: "text-xs", style: { color: T.muted } }, "Analisis berhasil. Lihat detail di Dashboard."))))));
 }
 /* =========================================================================
    KONFIGURASI 6 INDIKATOR
@@ -18776,7 +18795,24 @@ const INDICATORS = [
                             React.createElement("td", { className: "px-3 py-1.5 text-right" }, fmtRp(s.targetKkp)),
                             React.createElement("td", { className: "px-3 py-1.5 text-right", style: { color: T.success, fontWeight: 600 } }, fmtRp(s.penggunaanKkp)))))))))),
             React.createElement("div", { className: "text-xs font-semibold mb-1", style: { color: T.navy } }, "Satker KKP di Bawah Target (Pareto)"),
-            React.createElement(ParetoTable, { pareto: r.kkpShortfall, unit: "Rp" }))),
+            React.createElement(ParetoTable, { pareto: r.kkpShortfall, unit: "Rp" }),
+            r.kkpNoTransactionDetail && r.kkpNoTransactionDetail.length > 0 && (React.createElement("div", { className: "mb-3 mt-3" },
+                React.createElement("div", { className: "text-xs font-semibold mb-1", style: { color: T.danger } }, "Satker yang Sama Sekali Belum Transaksi KKP"),
+                React.createElement("div", { className: "rounded-lg overflow-hidden border", style: { borderColor: T.line } },
+                    React.createElement("table", { className: "w-full text-xs" },
+                        React.createElement("thead", null,
+                            React.createElement("tr", { style: { background: T.bg } },
+                                React.createElement("th", { className: "text-left px-3 py-1.5 font-medium", style: { color: T.muted } }, "Satker"),
+                                React.createElement("th", { className: "text-left px-3 py-1.5 font-medium", style: { color: T.muted } }, "Nama Satker"),
+                                React.createElement("th", { className: "text-right px-3 py-1.5 font-medium", style: { color: T.muted } }, "Target KKP"),
+                                React.createElement("th", { className: "text-right px-3 py-1.5 font-medium", style: { color: T.muted } }, "UP KKP/bln"),
+                                React.createElement("th", { className: "text-right px-3 py-1.5 font-medium", style: { color: T.muted } }, "Status"))),
+                        React.createElement("tbody", { style: { fontFamily: "'IBM Plex Mono', monospace" } }, r.kkpNoTransactionDetail.map((s) => (React.createElement("tr", { key: s.satker, style: { borderTop: "1px solid " + T.line } },
+                            React.createElement("td", { className: "px-3 py-1.5 font-medium", style: { fontFamily: "'Inter'" } }, s.satker),
+                            React.createElement("td", { className: "px-3 py-1.5", style: { fontFamily: "'Inter'", fontSize: "11px" } }, s.nama || "-"),
+                            React.createElement("td", { className: "px-3 py-1.5 text-right" }, fmtRp(s.targetKkp)),
+                            React.createElement("td", { className: "px-3 py-1.5 text-right" }, fmtRp(s.upKkpBulan)),
+                            React.createElement("td", { className: "px-3 py-1.5 text-right", style: { color: T.danger, fontWeight: 600 } }, "Tidak ada transaksi KKP"))))))))))),
     },
     {
         id: "capaian", title: "Capaian Output", icon: Target,
@@ -18798,11 +18834,12 @@ const INDICATORS = [
 /* =========================================================================
    DASHBOARD NILAI IKPA
    ========================================================================= */
+
 function DetailPage(_a) {
     var config = _a.config, hasil = _a.hasil, periode = _a.periode, onBack = _a.onBack;
     if (!hasil || !config) return null;
     var Icon = config.icon;
-    return (React.createElement("div", { className: "detail-page" },
+    return React.createElement("div", { className: "detail-page" },
         React.createElement("button", { className: "back-btn", onClick: onBack },
             React.createElement("span", null, "\u2190"),
             " Kembali ke Dashboard"),
@@ -18813,9 +18850,9 @@ function DetailPage(_a) {
                 React.createElement("div", null,
                     React.createElement("div", { className: "text-sm font-semibold text-white" }, config.title),
                     React.createElement("div", { className: "text-xs", style: { color: "#9FB3CC" } }, config.headline(hasil)))),
-            React.createElement("div", { className: "p-4" },
-                config.renderDetail(hasil)))));
+            React.createElement("div", { className: "p-4" }, config.renderDetail(hasil))));
 }
+
 function IkpaDashboard(_a) {
     var resultsMap = _a.resultsMap, periode = _a.periode, onIndicatorClick = _a.onIndicatorClick;
     var indicators = INDICATORS.map(function (cfg) {
@@ -18945,8 +18982,7 @@ function KajianIKPAApp() {
                             p, " \u2014 ", BULAN_NAMA[p])); })))))),
         React.createElement("div", { style: { height: 3, background: "linear-gradient(90deg, " + T.gold + ", " + T.goldSoft + ", " + T.gold + ")" } }),
         React.createElement("div", { className: "px-6 py-6", style: { maxWidth: "1440px", margin: "0 auto" } },
-            detailViewId && resultsMap[detailViewId] && (React.createElement("div", { key: detailViewId, style: { maxWidth: "900px", margin: "0 auto" } },
-                React.createElement(DetailPage, { config: INDICATORS.find(function (c) { return c.id === detailViewId; }), hasil: resultsMap[detailViewId], periode: periode, onBack: function () { setDetailViewId(null); setShowDashboard(true); } }))),
+            detailViewId && resultsMap[detailViewId] && (React.createElement(DetailPage, { config: INDICATORS.find(function (c2) { return c2.id === detailViewId; }), hasil: resultsMap[detailViewId], periode: periode, onBack: function () { setDetailViewId(null); setShowDashboard(true); } })),
             !detailViewId && showDashboard && allIndicatorsDone && (React.createElement(IkpaDashboard, { resultsMap: resultsMap, periode: periode, onIndicatorClick: function (id) { setDetailViewId(id); } })),
             !detailViewId && !showDashboard && !selectedId && (React.createElement("div", { className: "animate-in", style: { textAlign: "center", padding: "4rem 2rem" } },
                 React.createElement("div", { style: { fontSize: "2.5rem", marginBottom: ".75rem", opacity: .25 } }, "..."),
@@ -18959,5 +18995,5 @@ function KajianIKPAApp() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(KajianIKPAApp));
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2092f2658e970ac',t:'MTc4NDk2MTc0MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a21859c8fb988de9',t:'MTc4NTEyMDc3NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
