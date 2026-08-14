@@ -18506,9 +18506,9 @@ function TrendChart({ series, title, unit = "" }) {
 /* =========================================================================
    KARTU INDIKATOR
    ========================================================================= */
-function IndicatorCard(_a) { var config = _a.config, periode = _a.periode, expanded = _a.expanded, onToggle = _a.onToggle, onResult = _a.onResult;
+function IndicatorCard(_a) { var config = _a.config, periode = _a.periode, expanded = _a.expanded, onToggle = _a.onToggle, onResult = _a.onResult, initialResult = _a.initialResult;
     const [files, setFiles] = useState({});
-    const [result, setResult] = useState(null);
+    const [result, setResult] = useState(initialResult || null);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const allFilesReady = config.slots.every((s) => files[s.key]);
@@ -18920,16 +18920,68 @@ function IkpaDashboard(_a) {
             }))));
 }
 /* =========================================================================
+   PERSISTENSI — hasil analisis disimpan sebagai "database" lokal di browser
+   (localStorage). Data tidak hilang saat aplikasi ditutup, sehingga pengguna
+   tidak perlu meng-upload ulang file yang sudah pernah dianalisis.
+   ========================================================================= */
+const STORAGE_KEY = "kajianIkpaDatabase_v1";
+
+function saveAppState(state) {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+        // storage penuh / tidak tersedia — abaikan
+    }
+}
+
+function loadAppState() {
+    try {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        var parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && parsed.resultsMap && typeof parsed.resultsMap === "object") {
+            return parsed;
+        }
+        return null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function clearAppState() {
+    try {
+        localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {}
+}
+
+/* =========================================================================
    APP
    ========================================================================= */
 function KajianIKPAApp() {
-    const [periode, setPeriode] = useState("06");
+    const [periode, setPeriode] = useState(function () { var s = loadAppState(); return s && s.periode ? s.periode : "06"; });
     const [expandedSet, setExpandedSet] = useState(new Set());
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [selectedId, setSelectedId] = useState(null);
-    const [resultsMap, setResultsMap] = useState({});
-    const [showDashboard, setShowDashboard] = useState(false);
+    const [resultsMap, setResultsMap] = useState(function () { var s = loadAppState(); return s && s.resultsMap ? s.resultsMap : {}; });
+    const [showDashboard, setShowDashboard] = useState(function () {
+        var s = loadAppState();
+        if (s && s.resultsMap) {
+            var done = INDICATORS.every(function (cfg) { return s.resultsMap[cfg.id] !== undefined && s.resultsMap[cfg.id] !== null; });
+            if (done) return true;
+        }
+        return false;
+    });
     const [detailViewId, setDetailViewId] = useState(null);
+    React.useEffect(function () {
+        saveAppState({ periode: periode, resultsMap: resultsMap });
+    }, [periode, resultsMap]);
+    var handleReset = function () {
+        clearAppState();
+        setResultsMap({});
+        setSelectedId(null);
+        setShowDashboard(false);
+        setDetailViewId(null);
+    };
     var selectedCfg = selectedId ? INDICATORS.find(function (c) { return c.id === selectedId; }) : null;
     var btnLabel = selectedCfg ? selectedCfg.title : "Nama Indikator IKPA";
     var handleResult = function (id, res) { setResultsMap(function (prev) { var next = Object.assign({}, prev); next[id] = res; return next; }); };
@@ -18977,6 +19029,7 @@ function KajianIKPAApp() {
                                 }))),
                         allIndicatorsDone && (React.createElement("button", { className: "ikpa-btn-dashboard" + (showDashboard ? " active" : ""), onClick: function () { setShowDashboard(function (v) { return !v; }); setSelectedId(null); } },
                             "Dashboard IKPA")),
+                        React.createElement("button", { className: "ikpa-btn-dashboard", onClick: handleReset, style: { borderColor: "rgba(255,255,255,.22)" } }, "Reset Data"),
                         React.createElement("span", { className: "text-xs", style: { color: "#9FB3CC" } }, "Periode"),
                         React.createElement("select", { value: periode, onChange: function (e) { return setPeriode(e.target.value); }, className: "px-3 py-2 rounded-lg text-sm font-medium border-0 outline-none", style: { background: "rgba(255,255,255,0.1)", color: "white", fontFamily: "'IBM Plex Mono', monospace" } }, Object.keys(BULAN_NAMA).map(function (p) { return (React.createElement("option", { key: p, value: p, style: { color: T.ink } },
                             p, " \u2014 ", BULAN_NAMA[p])); })))))),
@@ -18989,11 +19042,11 @@ function KajianIKPAApp() {
                 React.createElement("div", { className: "text-sm font-medium mb-1", style: { color: "var(--muted)" } }, "Belum ada indikator yang dipilih"),
                 React.createElement("div", { className: "text-xs", style: { color: "var(--muted)", opacity: .7 } }, "Klik tombol Nama Indikator IKPA di pojok kanan atas untuk memulai analisis"))),
             !detailViewId && !showDashboard && selectedId && selectedCfg && (React.createElement("div", { key: selectedId, id: "card-" + selectedId, className: "animate-in", style: { maxWidth: "900px", margin: "0 auto" } },
-                React.createElement(IndicatorCard, { config: selectedCfg, periode: periode, expanded: expandedSet.has(selectedId), onToggle: function () { return togglePanel(selectedId); }, onResult: handleResult }))),
-            React.createElement("div", { className: "mt-6 text-xs text-center", style: { color: T.muted } }, "Satker BLU/dana khusus (423620) dikecualikan otomatis."))));
+                React.createElement(IndicatorCard, { config: selectedCfg, periode: periode, expanded: expandedSet.has(selectedId), onToggle: function () { return togglePanel(selectedId); }, onResult: handleResult, initialResult: resultsMap[selectedId] }))),
+            React.createElement("div", { className: "mt-6 text-xs text-center", style: { color: T.muted } }, "Satker BLU/dana khusus (423620) dikecualikan otomatis. \u00B7 Data hasil analisis tersimpan otomatis sebagai database lokal di browser."))));
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(KajianIKPAApp));
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a21859c8fb988de9',t:'MTc4NTEyMDc3NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
