@@ -18506,7 +18506,7 @@ function TrendChart({ series, title, unit = "" }) {
 /* =========================================================================
    KARTU INDIKATOR
    ========================================================================= */
-function IndicatorCard(_a) { var config = _a.config, periode = _a.periode, expanded = _a.expanded, onToggle = _a.onToggle, onResult = _a.onResult, initialResult = _a.initialResult;
+function IndicatorCard(_a) { var config = _a.config, periode = _a.periode, expanded = _a.expanded, onToggle = _a.onToggle, onResult = _a.onResult, initialResult = _a.initialResult, onData = _a.onData;
     const [files, setFiles] = useState({});
     const [result, setResult] = useState(initialResult || null);
     const [error, setError] = useState(null);
@@ -18516,6 +18516,8 @@ function IndicatorCard(_a) { var config = _a.config, periode = _a.periode, expan
     configRef.current = config;
     var onResultRef = useRef(onResult);
     onResultRef.current = onResult;
+    var onDataRef = useRef(onData);
+    onDataRef.current = onData;
     const runAnalysis = useCallback(async function () {
         var cfg = configRef.current;
         var onRes = onResultRef.current;
@@ -18527,6 +18529,8 @@ function IndicatorCard(_a) { var config = _a.config, periode = _a.periode, expan
                 var slot = _a[_i];
                 workbooks[slot.key] = await readWorkbook(files[slot.key]);
             }
+            var onDat = onDataRef.current;
+            if (onDat) onDat(cfg.id, workbooks);
             var res = cfg.analyze(workbooks, periode);
             setResult(res);
             if (onRes) onRes(cfg.id, res);
@@ -18839,6 +18843,27 @@ function DetailPage(_a) {
     var config = _a.config, hasil = _a.hasil, periode = _a.periode, onBack = _a.onBack;
     if (!hasil || !config) return null;
     var Icon = config.icon;
+    if (hasil._derived) {
+        var valTxt = typeof hasil.nilai === "number" ? hasil.nilai.toFixed(2) : "--";
+        return React.createElement("div", { className: "detail-page" },
+            React.createElement("button", { className: "back-btn", onClick: onBack },
+                React.createElement("span", null, "\u2190"),
+                " Kembali ke Dashboard"),
+            React.createElement("div", { className: "rounded-xl border overflow-hidden mb-4", style: { borderColor: T.line, background: T.card } },
+                React.createElement("div", { className: "px-4 py-3 flex items-center gap-3", style: { background: "linear-gradient(135deg, " + T.navy + " 0%, " + T.navyDeep + " 100%)" } },
+                    React.createElement("div", { className: "w-9 h-9 rounded-lg flex items-center justify-center shrink-0", style: { background: "rgba(255,255,255,.12)" } },
+                        React.createElement(Icon, { size: 17, style: { color: T.goldSoft } })),
+                    React.createElement("div", null,
+                        React.createElement("div", { className: "text-sm font-semibold text-white" }, config.title),
+                        React.createElement("div", { className: "text-xs", style: { color: "#9FB3CC" } }, "Nilai IKPA bulan " + (BULAN_NAMA[hasil.periode] || hasil.periode)))),
+                React.createElement("div", { className: "p-4" },
+                    React.createElement("div", { className: "flex items-baseline gap-2 mb-3" },
+                        React.createElement("span", { className: "text-2xl font-bold tabular-nums", style: { fontFamily: "'IBM Plex Mono', monospace", color: T.navy } }, valTxt),
+                        React.createElement("span", { className: "text-xs", style: { color: T.muted } }, "Nilai IKPA")),
+                    React.createElement(TrendChart, { series: hasil.series, title: "Tren Nilai " + config.title, unit: "" }),
+                    React.createElement("div", { className: "text-xs px-3 py-2 rounded-lg", style: { background: "#FBF2DF", color: "#8A6A1E" } },
+                        "Nilai bulan ini diambil dari data tren yang sudah tersimpan. Untuk analisis detail lengkap bulan ini, upload ulang file indikator ini agar data mentahnya tersimpan sebagai database."))));
+    }
     return React.createElement("div", { className: "detail-page" },
         React.createElement("button", { className: "back-btn", onClick: onBack },
             React.createElement("span", null, "\u2190"),
@@ -18954,6 +18979,29 @@ function clearAppState() {
     } catch (e) {}
 }
 
+/* Penyimpanan data MENTAH (hasil parse file) agar analisis bisa diulang
+   untuk bulan lain tanpa upload ulang. */
+const RAW_STORAGE_KEY = "kajianIkpaRawData_v1";
+
+function saveRawData(map) {
+    try {
+        localStorage.setItem(RAW_STORAGE_KEY, JSON.stringify(map));
+    } catch (e) {
+        // storage penuh — abaikan; analisis tetap jalan di sesi ini
+    }
+}
+
+function loadRawData() {
+    try {
+        var raw = localStorage.getItem(RAW_STORAGE_KEY);
+        if (!raw) return {};
+        var parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+        return {};
+    }
+}
+
 /* =========================================================================
    APP
    ========================================================================= */
@@ -18972,15 +19020,60 @@ function KajianIKPAApp() {
         return false;
     });
     const [detailViewId, setDetailViewId] = useState(null);
+    const [rawDataMap, setRawDataMap] = useState(loadRawData);
     React.useEffect(function () {
         saveAppState({ periode: periode, resultsMap: resultsMap });
     }, [periode, resultsMap]);
+    React.useEffect(function () {
+        saveRawData(rawDataMap);
+    }, [rawDataMap]);
     var handleReset = function () {
         clearAppState();
         setResultsMap({});
         setSelectedId(null);
         setShowDashboard(false);
         setDetailViewId(null);
+        setRawDataMap({});
+        try { localStorage.removeItem(RAW_STORAGE_KEY); } catch (e) {}
+    };
+    var handleData = function (id, workbooks) {
+        setRawDataMap(function (prev) { var next = Object.assign({}, prev); next[id] = workbooks; return next; });
+    };
+    var handleGo = function () {
+        var next = Object.assign({}, resultsMap);
+        var changed = false;
+        INDICATORS.forEach(function (cfg) {
+            var raw = rawDataMap[cfg.id];
+            if (raw) {
+                try {
+                    next[cfg.id] = cfg.analyze(raw, periode);
+                    changed = true;
+                } catch (e) {}
+            } else if (resultsMap[cfg.id] && resultsMap[cfg.id].series) {
+                var existing = resultsMap[cfg.id];
+                if (!existing._derived && String(existing.periode) === String(periode)) {
+                    next[cfg.id] = existing;
+                } else {
+                    var s = existing.series;
+                    var pt = null;
+                    s.forEach(function (x) { if (Number(x.periode) === Number(periode)) pt = x; });
+                    if (!pt && s.length) pt = s[s.length - 1];
+                    if (pt) {
+                        var d = { _derived: true, indikator: cfg.title, periode: periode, nilai: pt.nilai, series: s };
+                        if (cfg.id === "tagihan") d.pctTepat = pt.nilai;
+                        if (cfg.id === "capaian") { d.nilaiKppn = pt.nilai; d.rata2 = pt.nilai; }
+                        next[cfg.id] = d;
+                        changed = true;
+                    }
+                }
+            }
+        });
+        if (changed) {
+            setResultsMap(next);
+            setDetailViewId(null);
+            setSelectedId(null);
+            setShowDashboard(true);
+        }
     };
     var selectedCfg = selectedId ? INDICATORS.find(function (c) { return c.id === selectedId; }) : null;
     var btnLabel = selectedCfg ? selectedCfg.title : "Nama Indikator IKPA";
@@ -19032,7 +19125,8 @@ function KajianIKPAApp() {
                         React.createElement("button", { className: "ikpa-btn-dashboard", onClick: handleReset, style: { borderColor: "rgba(255,255,255,.22)" } }, "Reset Data"),
                         React.createElement("span", { className: "text-xs", style: { color: "#9FB3CC" } }, "Periode"),
                         React.createElement("select", { value: periode, onChange: function (e) { return setPeriode(e.target.value); }, className: "px-3 py-2 rounded-lg text-sm font-medium border-0 outline-none", style: { background: "rgba(255,255,255,0.1)", color: "white", fontFamily: "'IBM Plex Mono', monospace" } }, Object.keys(BULAN_NAMA).map(function (p) { return (React.createElement("option", { key: p, value: p, style: { color: T.ink } },
-                            p, " \u2014 ", BULAN_NAMA[p])); })))))),
+                            p, " \u2014 ", BULAN_NAMA[p])); })),
+                        React.createElement("button", { className: "ikpa-btn-dashboard", onClick: handleGo, title: "Tampilkan nilai IKPA bulan terpilih", style: { background: "rgba(201,154,61,.22)", borderColor: "var(--gold)", color: "var(--goldSoft)" } }, "Go"))))),
         React.createElement("div", { style: { height: 3, background: "linear-gradient(90deg, " + T.gold + ", " + T.goldSoft + ", " + T.gold + ")" } }),
         React.createElement("div", { className: "px-6 py-6", style: { maxWidth: "1440px", margin: "0 auto" } },
             detailViewId && resultsMap[detailViewId] && (React.createElement(DetailPage, { config: INDICATORS.find(function (c2) { return c2.id === detailViewId; }), hasil: resultsMap[detailViewId], periode: periode, onBack: function () { setDetailViewId(null); setShowDashboard(true); } })),
@@ -19042,11 +19136,11 @@ function KajianIKPAApp() {
                 React.createElement("div", { className: "text-sm font-medium mb-1", style: { color: "var(--muted)" } }, "Belum ada indikator yang dipilih"),
                 React.createElement("div", { className: "text-xs", style: { color: "var(--muted)", opacity: .7 } }, "Klik tombol Nama Indikator IKPA di pojok kanan atas untuk memulai analisis"))),
             !detailViewId && !showDashboard && selectedId && selectedCfg && (React.createElement("div", { key: selectedId, id: "card-" + selectedId, className: "animate-in", style: { maxWidth: "900px", margin: "0 auto" } },
-                React.createElement(IndicatorCard, { config: selectedCfg, periode: periode, expanded: expandedSet.has(selectedId), onToggle: function () { return togglePanel(selectedId); }, onResult: handleResult, initialResult: resultsMap[selectedId] }))),
-            React.createElement("div", { className: "mt-6 text-xs text-center", style: { color: T.muted } }, "Satker BLU/dana khusus (423620) dikecualikan otomatis. \u00B7 Data hasil analisis tersimpan otomatis sebagai database lokal di browser."))));
+                React.createElement(IndicatorCard, { config: selectedCfg, periode: periode, expanded: expandedSet.has(selectedId), onToggle: function () { return togglePanel(selectedId); }, onResult: handleResult, initialResult: resultsMap[selectedId], onData: handleData }))),
+            React.createElement("div", { className: "mt-6 text-xs text-center", style: { color: T.muted } }, "Satker BLU/dana khusus (423620) dikecualikan otomatis. \u00B7 Data tersimpan otomatis di database lokal. \u00B7 Pilih bulan lalu klik Go untuk melihat nilai IKPA bulan lain."))));
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(KajianIKPAApp));
 </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2ac5c066d10f8d3',t:'MTc4NjY3Mjc1OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
