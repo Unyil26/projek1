@@ -18851,6 +18851,25 @@ const INDICATORS = [
    DASHBOARD NILAI IKPA
    ========================================================================= */
 
+function BulanTable(_a) {
+    var series = _a.series, current = _a.current, title = _a.title;
+    if (!series || !series.length) return null;
+    return React.createElement("div", { className: "mb-3 mt-3" },
+        React.createElement("div", { className: "text-xs font-semibold mb-1", style: { color: T.navy } }, title || "Nilai per Bulan"),
+        React.createElement("div", { className: "rounded-lg overflow-hidden border", style: { borderColor: T.line } },
+            React.createElement("table", { className: "w-full text-xs" },
+                React.createElement("thead", null,
+                    React.createElement("tr", { style: { background: T.bg } },
+                        React.createElement("th", { className: "text-left px-3 py-1.5 font-medium", style: { color: T.muted } }, "Bulan"),
+                        React.createElement("th", { className: "text-right px-3 py-1.5 font-medium", style: { color: T.muted } }, "Nilai"))),
+                React.createElement("tbody", null, series.map(function (s, i) {
+                    var isCur = current && String(s.periode) === String(current);
+                    return React.createElement("tr", { key: i, style: { borderTop: i ? "1px solid " + T.line : "none", background: isCur ? "#FBF2DF" : "transparent" } },
+                        React.createElement("td", { className: "px-3 py-1.5 font-medium", style: { color: T.ink } }, (BULAN_NAMA[s.periode] || s.periode) + (isCur ? "  \u2022" : "")),
+                        React.createElement("td", { className: "px-3 py-1.5 text-right tabular-nums font-semibold", style: { fontFamily: "'IBM Plex Mono', monospace", color: T.ink } }, (typeof s.nilai === "number" ? s.nilai.toFixed(2) : s.nilai)));
+                })))));
+}
+
 function DetailPage(_a) {
     var config = _a.config, hasil = _a.hasil, periode = _a.periode, onBack = _a.onBack;
     if (!hasil || !config) return null;
@@ -18873,8 +18892,9 @@ function DetailPage(_a) {
                         React.createElement("span", { className: "text-2xl font-bold tabular-nums", style: { fontFamily: "'IBM Plex Mono', monospace", color: T.navy } }, valTxt),
                         React.createElement("span", { className: "text-xs", style: { color: T.muted } }, "Nilai IKPA")),
                     React.createElement(TrendChart, { series: hasil.series, title: "Tren Nilai " + config.title, unit: "" }),
+                    React.createElement(BulanTable, { series: hasil.series, current: hasil.periode, title: "Nilai per Bulan" }),
                     React.createElement("div", { className: "text-xs px-3 py-2 rounded-lg", style: { background: "#FBF2DF", color: "#8A6A1E" } },
-                        "Nilai bulan ini diambil dari data tren yang sudah tersimpan. Untuk analisis detail lengkap bulan ini, upload ulang file indikator ini agar data mentahnya tersimpan sebagai database."))));
+                        "Nilai bulan ini diambil dari data tren yang sudah tersimpan. Untuk analisis detail lengkap (Pareto & tabel satker) bulan ini, upload ulang file indikator ini agar data mentahnya tersimpan sebagai database."))));
     }
     return React.createElement("div", { className: "detail-page" },
         React.createElement("button", { className: "back-btn", onClick: onBack },
@@ -18887,7 +18907,7 @@ function DetailPage(_a) {
                 React.createElement("div", null,
                     React.createElement("div", { className: "text-sm font-semibold text-white" }, config.title),
                     React.createElement("div", { className: "text-xs", style: { color: "#9FB3CC" } }, config.headline(hasil)))),
-            React.createElement("div", { className: "p-4" }, config.renderDetail(hasil))));
+            React.createElement("div", { className: "p-4" }, config.renderDetail(hasil), React.createElement(BulanTable, { series: hasil.series, current: hasil.periode, title: "Nilai per Bulan" }))));
 }
 
 function IkpaDashboard(_a) {
@@ -18997,27 +19017,68 @@ function clearAppState() {
     } catch (e) {}
 }
 
-/* Penyimpanan data MENTAH (hasil parse file) agar analisis bisa diulang
-   untuk bulan lain tanpa upload ulang. */
-const RAW_STORAGE_KEY = "kajianIkpaRawData_v1";
+/* Penyimpanan data MENTAH (hasil parse file) di IndexedDB agar analisis bisa
+   diulang untuk bulan lain tanpa upload ulang. IndexedDB dipakai karena
+   kapasitasnya jauh lebih besar daripada localStorage (file SATKER besar). */
+const RAW_DB_NAME = "kajianIkpaRawDb";
+const RAW_STORE = "rawData";
 
-function saveRawData(map) {
-    try {
-        localStorage.setItem(RAW_STORAGE_KEY, JSON.stringify(map));
-    } catch (e) {
-        // storage penuh — abaikan; analisis tetap jalan di sesi ini
-    }
+function idbOpen() {
+    return new Promise(function (resolve, reject) {
+        if (typeof indexedDB === "undefined") { reject(new Error("IndexedDB tidak tersedia")); return; }
+        var req = indexedDB.open(RAW_DB_NAME, 1);
+        req.onupgradeneeded = function () {
+            var db = req.result;
+            if (!db.objectStoreNames.contains(RAW_STORE)) db.createObjectStore(RAW_STORE);
+        };
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror = function () { reject(req.error); };
+    });
 }
 
-function loadRawData() {
-    try {
-        var raw = localStorage.getItem(RAW_STORAGE_KEY);
-        if (!raw) return {};
-        var parsed = JSON.parse(raw);
-        return parsed && typeof parsed === "object" ? parsed : {};
-    } catch (e) {
-        return {};
-    }
+function saveRawOne(id, workbooks) {
+    idbOpen().then(function (db) {
+        try {
+            var tx = db.transaction(RAW_STORE, "readwrite");
+            tx.objectStore(RAW_STORE).put(workbooks, id);
+            tx.oncomplete = function () { db.close(); };
+            tx.onerror = function () { db.close(); };
+            tx.onabort = function () { db.close(); };
+        } catch (e) { db.close(); }
+    }, function () {});
+}
+
+function loadRawAll(cb) {
+    idbOpen().then(function (db) {
+        try {
+            var tx = db.transaction(RAW_STORE, "readonly");
+            var store = tx.objectStore(RAW_STORE);
+            var reqKeys = store.getAllKeys();
+            reqKeys.onsuccess = function () {
+                var keys = reqKeys.result || [];
+                var map = {};
+                var pending = keys.length;
+                if (pending === 0) { db.close(); cb(map); return; }
+                keys.forEach(function (k) {
+                    var g = store.get(k);
+                    g.onsuccess = function () { map[k] = g.result; pending -= 1; if (pending === 0) { db.close(); cb(map); } };
+                    g.onerror = function () { pending -= 1; if (pending === 0) { db.close(); cb(map); } };
+                });
+            };
+            reqKeys.onerror = function () { db.close(); cb({}); };
+        } catch (e) { db.close(); cb({}); }
+    }, function () { cb({}); });
+}
+
+function clearRawAll(cb) {
+    idbOpen().then(function (db) {
+        try {
+            var tx = db.transaction(RAW_STORE, "readwrite");
+            tx.objectStore(RAW_STORE).clear();
+            tx.oncomplete = function () { db.close(); if (cb) cb(); };
+            tx.onerror = function () { db.close(); if (cb) cb(); };
+        } catch (e) { db.close(); if (cb) cb(); }
+    }, function () { if (cb) cb(); });
 }
 
 /* =========================================================================
@@ -19029,6 +19090,17 @@ function KajianIKPAApp() {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [selectedId, setSelectedId] = useState(null);
     const [resultsMap, setResultsMap] = useState(function () { var s = loadAppState(); return s && s.resultsMap ? s.resultsMap : {}; });
+    const [fullResults, setFullResults] = useState(function () {
+        var s = loadAppState();
+        if (s && s.fullResults && Object.keys(s.fullResults).length) return s.fullResults;
+        var seeded = {};
+        if (s && s.resultsMap) {
+            Object.keys(s.resultsMap).forEach(function (k) {
+                if (s.resultsMap[k] && !s.resultsMap[k]._derived) seeded[k] = s.resultsMap[k];
+            });
+        }
+        return seeded;
+    });
     const [showDashboard, setShowDashboard] = useState(function () {
         var s = loadAppState();
         if (s && s.resultsMap) {
@@ -19038,14 +19110,14 @@ function KajianIKPAApp() {
         return false;
     });
     const [detailViewId, setDetailViewId] = useState(null);
-    const [rawDataMap, setRawDataMap] = useState(loadRawData);
+    const [rawDataMap, setRawDataMap] = useState({});
     const [dispensasiSpm, setDispensasiSpm] = useState(function () { var s = loadAppState(); return s && typeof s.dispensasiSpm === "number" ? s.dispensasiSpm : 0; });
     React.useEffect(function () {
-        saveAppState({ periode: periode, resultsMap: resultsMap, dispensasiSpm: dispensasiSpm });
-    }, [periode, resultsMap, dispensasiSpm]);
+        saveAppState({ periode: periode, resultsMap: resultsMap, fullResults: fullResults, dispensasiSpm: dispensasiSpm });
+    }, [periode, resultsMap, fullResults, dispensasiSpm]);
     React.useEffect(function () {
-        saveRawData(rawDataMap);
-    }, [rawDataMap]);
+        loadRawAll(function (map) { setRawDataMap(map); });
+    }, []);
     var handleReset = function () {
         clearAppState();
         setResultsMap({});
@@ -19053,10 +19125,12 @@ function KajianIKPAApp() {
         setShowDashboard(false);
         setDetailViewId(null);
         setRawDataMap({});
+        setFullResults({});
         setDispensasiSpm(0);
-        try { localStorage.removeItem(RAW_STORAGE_KEY); } catch (e) {}
+        clearRawAll();
     };
     var handleData = function (id, workbooks) {
+        saveRawOne(id, workbooks);
         setRawDataMap(function (prev) { var next = Object.assign({}, prev); next[id] = workbooks; return next; });
     };
     var handleGo = function () {
@@ -19069,21 +19143,27 @@ function KajianIKPAApp() {
                     next[cfg.id] = cfg.analyze(raw, periode);
                     changed = true;
                 } catch (e) {}
-            } else if (resultsMap[cfg.id] && resultsMap[cfg.id].series) {
-                var existing = resultsMap[cfg.id];
-                if (!existing._derived && String(existing.periode) === String(periode)) {
-                    next[cfg.id] = existing;
-                } else {
-                    var s = existing.series;
-                    var pt = null;
-                    s.forEach(function (x) { if (Number(x.periode) === Number(periode)) pt = x; });
-                    if (!pt && s.length) pt = s[s.length - 1];
-                    if (pt) {
-                        var d = { _derived: true, indikator: cfg.title, periode: periode, nilai: pt.nilai, series: s };
-                        if (cfg.id === "tagihan") d.pctTepat = pt.nilai;
-                        if (cfg.id === "capaian") { d.nilaiKppn = pt.nilai; d.rata2 = pt.nilai; }
-                        next[cfg.id] = d;
-                        changed = true;
+            } else {
+                var full = fullResults[cfg.id];
+                if (full && !full._derived && String(full.periode) === String(periode)) {
+                    next[cfg.id] = full;
+                    changed = true;
+                } else if (resultsMap[cfg.id] && resultsMap[cfg.id].series) {
+                    var existing = resultsMap[cfg.id];
+                    if (!existing._derived && String(existing.periode) === String(periode)) {
+                        next[cfg.id] = existing;
+                    } else {
+                        var s = existing.series;
+                        var pt = null;
+                        s.forEach(function (x) { if (Number(x.periode) === Number(periode)) pt = x; });
+                        if (!pt && s.length) pt = s[s.length - 1];
+                        if (pt) {
+                            var d = { _derived: true, indikator: cfg.title, periode: periode, nilai: pt.nilai, series: s };
+                            if (cfg.id === "tagihan") d.pctTepat = pt.nilai;
+                            if (cfg.id === "capaian") { d.nilaiKppn = pt.nilai; d.rata2 = pt.nilai; }
+                            next[cfg.id] = d;
+                            changed = true;
+                        }
                     }
                 }
             }
@@ -19097,7 +19177,10 @@ function KajianIKPAApp() {
     };
     var selectedCfg = selectedId ? INDICATORS.find(function (c) { return c.id === selectedId; }) : null;
     var btnLabel = selectedCfg ? selectedCfg.title : "Nama Indikator IKPA";
-    var handleResult = function (id, res) { setResultsMap(function (prev) { var next = Object.assign({}, prev); next[id] = res; return next; }); };
+    var handleResult = function (id, res) {
+        setFullResults(function (prev) { var n = Object.assign({}, prev); n[id] = res; return n; });
+        setResultsMap(function (prev) { var next = Object.assign({}, prev); next[id] = res; return next; });
+    };
     var allIndicatorsDone = INDICATORS.every(function (cfg) { return resultsMap[cfg.id] !== undefined && resultsMap[cfg.id] !== null; });
     const togglePanel = function (id) {
         setExpandedSet(function (prev) {
@@ -19162,5 +19245,5 @@ function KajianIKPAApp() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(KajianIKPAApp));
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2ac8bdaacec29dc',t:'MTc4NjY3NDcxNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2acf857ad107d7c',t:'MTc4NjY3OTE2MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
