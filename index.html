@@ -147,6 +147,9 @@
   .back-btn:hover { background: #EEF1F5; border-color: #C8D2DF; }
   .back-btn span { font-size: 1rem; line-height: 1; }
 
+  .ikpa-hero-calc { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .6rem; font-size: .75rem; opacity: .92; }
+  .ikpa-hero-calc b { font-family: 'IBM Plex Mono', monospace; color: var(--goldSoft); }
+  .ikpa-hero-calc .disp-input { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.3); border-radius: 6px; color: #fff; padding: .25rem .4rem; width: 72px; font-family: 'IBM Plex Mono', monospace; font-size: .75rem; }
   .outline-none{outline:none;} .transition-colors{transition-property:color,background-color,border-color;transition-duration:150ms;}
 </style>
 </head>
@@ -17626,6 +17629,15 @@ const TARGET_PENYERAPAN = {
 const BULAN_MAP = { JAN: "01", FEB: "02", MAR: "03", APR: "04", MAY: "05", JUN: "06",
     JUL: "07", AUG: "08", SEP: "09", OCT: "10", NOV: "11", DEC: "12" };
 const BULAN_NAMA = { "01": "Januari", "02": "Februari", "03": "Maret", "04": "April", "05": "Mei", "06": "Juni" };
+const BOBOT_IKPA = {
+    revisi: 10,        // Revisi DIPA
+    deviasi: 15,       // Deviasi Halaman III DIPA
+    penyerapan: 20,    // Penyerapan Anggaran
+    kontraktual: 10,   // Belanja Kontraktual
+    tagihan: 10,       // Penyelesaian Tagihan
+    uptup: 10,         // Pengelolaan UP dan TUP
+    capaian: 25,       // Capaian Output
+}; // total = 100%; Dispensasi SPM adalah PENGURANG Nilai Total IKPA
 /* =========================================================================
    UTIL PARSING ANGKA
    ========================================================================= */
@@ -18879,7 +18891,8 @@ function DetailPage(_a) {
 }
 
 function IkpaDashboard(_a) {
-    var resultsMap = _a.resultsMap, periode = _a.periode, onIndicatorClick = _a.onIndicatorClick;
+    var resultsMap = _a.resultsMap, periode = _a.periode, onIndicatorClick = _a.onIndicatorClick, dispensasiSpm = _a.dispensasiSpm, onDispensasiChange = _a.onDispensasiChange;
+    // Nilai akhir indikator = nilai indikator x bobot indikator
     var indicators = INDICATORS.map(function (cfg) {
         var r = resultsMap[cfg.id];
         var val = null;
@@ -18889,47 +18902,52 @@ function IkpaDashboard(_a) {
             else if (typeof r.nilai === "number") val = r.nilai;
             else if (typeof r.rata2 === "number") val = r.rata2;
         }
+        var bobot = BOBOT_IKPA[cfg.id] || 0;
+        var weighted = (val !== null && typeof val === "number") ? val * bobot / 100 : null;
         var tone = "success";
         if (val !== null) {
             if (val >= 95) tone = "success";
             else if (val >= 85) tone = "warning";
             else tone = "danger";
         }
-        return { id: cfg.id, title: cfg.title, icon: cfg.icon, val: val, tone: tone, hasData: r !== null && r !== undefined };
+        return { id: cfg.id, title: cfg.title, icon: cfg.icon, val: val, bobot: bobot, weighted: weighted, tone: tone, hasData: r !== null && r !== undefined };
     });
     var allDone = indicators.every(function (i) { return i.hasData; });
-    var average = null;
-    var countWithData = indicators.filter(function (i) { return i.val !== null; }).length;
-    if (countWithData > 0) {
-        var sum = indicators.reduce(function (a, i) { return a + (i.val || 0); }, 0);
-        average = sum / countWithData;
-    }
-    var avgTone = "success";
-    if (average !== null) {
-        if (average >= 95) avgTone = "success";
-        else if (average >= 85) avgTone = "warning";
-        else avgTone = "danger";
-    }
     var completed = indicators.filter(function (i) { return i.hasData; }).length;
     var total = indicators.length;
     var bulan = BULAN_NAMA[periode] || periode;
+    // Nilai Total IKPA = penjumlahan nilai akhir 7 indikator (nilai x bobot)
+    var totalWeighted = indicators.reduce(function (a, i) { return a + (i.weighted || 0); }, 0);
+    var disp = (typeof dispensasiSpm === "number" && !isNaN(dispensasiSpm)) ? dispensasiSpm : 0;
+    // Nilai Akhir IKPA = Nilai Total IKPA - Dispensasi SPM
+    var nilaiAkhir = totalWeighted - disp;
+    var finalTone = "success";
+    if (nilaiAkhir >= 95) finalTone = "success";
+    else if (nilaiAkhir >= 85) finalTone = "warning";
+    else finalTone = "danger";
     return (React.createElement("div", { className: "ikpa-dashboard" },
         React.createElement("div", { className: "ikpa-hero" },
             React.createElement("div", { className: "ikpa-hero-score" },
-                React.createElement("span", { className: "big-num" }, average !== null ? average.toFixed(1) : "--"),
-                React.createElement("span", { className: "label" }, "Rata-rata IKPA")),
+                React.createElement("span", { className: "big-num" }, nilaiAkhir.toFixed(2)),
+                React.createElement("span", { className: "label" }, "Nilai Akhir IKPA")),
             React.createElement("div", { className: "ikpa-hero-info" },
                 React.createElement("h2", null, "Dashboard Nilai IKPA KPPN Pekalongan"),
                 React.createElement("p", null,
                     "Periode ", bulan, " — ",
                     completed, " dari ", total, " indikator telah dianalisis",
-                    allDone ? ". Seluruh indikator tersedia." : ". Upload indikator yang belum tersedia untuk melengkapi dashboard."))),
-        React.createElement("div", { className: "ikpa-section-title" }, "Nilai per Indikator"),
+                    allDone ? ". Seluruh indikator tersedia." : ". Upload indikator yang belum tersedia untuk melengkapi dashboard."),
+                React.createElement("div", { className: "ikpa-hero-calc" },
+                    React.createElement("span", null, "Nilai Total IKPA ", React.createElement("b", null, totalWeighted.toFixed(2))),
+                    React.createElement("span", null, "\u2212 Dispensasi SPM"),
+                    React.createElement("input", { type: "number", min: "0", max: "100", step: "0.01", className: "disp-input", value: disp, onChange: function (e) { var v = parseFloat(e.target.value); onDispensasiChange(isNaN(v) ? 0 : v); } }),
+                    React.createElement("span", null, "="),
+                    React.createElement("span", { style: { color: finalTone === "success" ? "#7BE0A8" : finalTone === "warning" ? "#E9C77B" : "#F2A99D" } }, "Nilai Akhir ", React.createElement("b", null, nilaiAkhir.toFixed(2)))))),
+        React.createElement("div", { className: "ikpa-section-title" }, "Nilai Akhir per Indikator (Nilai × Bobot)"),
         React.createElement("div", { className: "ikpa-card-grid" },
             indicators.map(function (ind, idx) {
                 var Icon = ind.icon;
-                var valDisplay = ind.val !== null ? ind.val.toFixed(2) : "--";
-                var subtext = ind.hasData ? "Klik untuk lihat detail" : "Belum diupload";
+                var valDisplay = ind.weighted !== null ? ind.weighted.toFixed(2) : "--";
+                var subtext = ind.hasData ? "Nilai " + ind.val.toFixed(1) + " × Bobot " + ind.bobot + "%" : "Belum diupload";
                 return (React.createElement("div", { key: ind.id, className: "ikpa-card " + ind.tone, onClick: function () { return onIndicatorClick(ind.id); }, style: { animationDelay: "calc(" + idx + " * 50ms)" } },
                     React.createElement("div", { className: "ikpa-card-header" },
                         React.createElement("div", null,
@@ -19021,9 +19039,10 @@ function KajianIKPAApp() {
     });
     const [detailViewId, setDetailViewId] = useState(null);
     const [rawDataMap, setRawDataMap] = useState(loadRawData);
+    const [dispensasiSpm, setDispensasiSpm] = useState(function () { var s = loadAppState(); return s && typeof s.dispensasiSpm === "number" ? s.dispensasiSpm : 0; });
     React.useEffect(function () {
-        saveAppState({ periode: periode, resultsMap: resultsMap });
-    }, [periode, resultsMap]);
+        saveAppState({ periode: periode, resultsMap: resultsMap, dispensasiSpm: dispensasiSpm });
+    }, [periode, resultsMap, dispensasiSpm]);
     React.useEffect(function () {
         saveRawData(rawDataMap);
     }, [rawDataMap]);
@@ -19034,6 +19053,7 @@ function KajianIKPAApp() {
         setShowDashboard(false);
         setDetailViewId(null);
         setRawDataMap({});
+        setDispensasiSpm(0);
         try { localStorage.removeItem(RAW_STORAGE_KEY); } catch (e) {}
     };
     var handleData = function (id, workbooks) {
@@ -19130,7 +19150,7 @@ function KajianIKPAApp() {
         React.createElement("div", { style: { height: 3, background: "linear-gradient(90deg, " + T.gold + ", " + T.goldSoft + ", " + T.gold + ")" } }),
         React.createElement("div", { className: "px-6 py-6", style: { maxWidth: "1440px", margin: "0 auto" } },
             detailViewId && resultsMap[detailViewId] && (React.createElement(DetailPage, { config: INDICATORS.find(function (c2) { return c2.id === detailViewId; }), hasil: resultsMap[detailViewId], periode: periode, onBack: function () { setDetailViewId(null); setShowDashboard(true); } })),
-            !detailViewId && showDashboard && allIndicatorsDone && (React.createElement(IkpaDashboard, { resultsMap: resultsMap, periode: periode, onIndicatorClick: function (id) { setDetailViewId(id); } })),
+            !detailViewId && showDashboard && allIndicatorsDone && (React.createElement(IkpaDashboard, { resultsMap: resultsMap, periode: periode, onIndicatorClick: function (id) { setDetailViewId(id); }, dispensasiSpm: dispensasiSpm, onDispensasiChange: setDispensasiSpm })),
             !detailViewId && !showDashboard && !selectedId && (React.createElement("div", { className: "animate-in", style: { textAlign: "center", padding: "4rem 2rem" } },
                 React.createElement("div", { style: { fontSize: "2.5rem", marginBottom: ".75rem", opacity: .25 } }, "..."),
                 React.createElement("div", { className: "text-sm font-medium mb-1", style: { color: "var(--muted)" } }, "Belum ada indikator yang dipilih"),
@@ -19142,5 +19162,5 @@ function KajianIKPAApp() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(KajianIKPAApp));
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2ac5c066d10f8d3',t:'MTc4NjY3Mjc1OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2ac8bdaacec29dc',t:'MTc4NjY3NDcxNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
